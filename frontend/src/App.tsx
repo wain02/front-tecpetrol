@@ -554,6 +554,20 @@ function App() {
   const [selectedModel, setSelectedModel] = useState<ModelKey>("rf");
   const [activeTab, setActiveTab] = useState<"dashboard" | "upload" | "docs">("dashboard");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [metadataFile, setMetadataFile] = useState<File | null>(null);
+  const [uploadStep, setUploadStep] = useState<"select" | "form">("select");
+  const [wellCount, setWellCount] = useState<string>("");
+  const [columnMap, setColumnMap] = useState<Record<string, string>>({
+    presion_boca_psi: "",
+    presion_anular_psi: "",
+    orificio_mm: "",
+    temperatura_boca_c: "",
+    densidad_agua_kg_l: "",
+    cloro_agua_g_l: "",
+    solidos_kg_hora: "",
+    solidos_l_hora: "",
+    solidos_acum_kg: "",
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -638,36 +652,160 @@ function App() {
 
         {activeTab === "upload" ? (
           <section className="upload">
-            <div className="upload__card">
-              <h1>Cargar archivo CSV</h1>
-              <p>
-                Subi un CSV con el mismo formato del pipeline. La carga valida el archivo en el navegador y deja listo el envio cuando
-                integremos el backend.
-              </p>
-              <label className="upload__drop">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    setSelectedFile(file);
-                  }}
-                />
-                <span className="upload__title">Arrastra el archivo o hace click</span>
-                <span className="upload__hint">Formato CSV, maximo 50 MB</span>
-              </label>
-              {selectedFile ? (
-                <div className="upload__meta">
-                  <div>
-                    <strong>{selectedFile.name}</strong>
-                    <span>{formatNumber(selectedFile.size / 1024, 1)} KB</span>
+            {uploadStep === "select" ? (
+              <div className="upload__card">
+                <h1>Cargar archivo CSV</h1>
+                <p>
+                  Subi un CSV con el mismo formato del pipeline. La carga valida el archivo en el navegador y deja listo el envio cuando
+                  integremos el backend.
+                </p>
+                <label className="upload__drop">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setSelectedFile(file);
+                    }}
+                  />
+                  <span className="upload__title">Arrastra el archivo o hace click</span>
+                  <span className="upload__hint">Formato CSV, maximo 50 MB</span>
+                </label>
+                {selectedFile ? (
+                  <div className="upload__meta">
+                    <div>
+                      <strong>{selectedFile.name}</strong>
+                      <span>{formatNumber(selectedFile.size / 1024, 1)} KB</span>
+                    </div>
+                    <button type="button" className="upload__clear" onClick={() => setSelectedFile(null)}>
+                      Quitar
+                    </button>
                   </div>
-                  <button type="button" className="upload__clear" onClick={() => setSelectedFile(null)}>
-                    Quitar
+                ) : null}
+
+                <div className="upload__divider" />
+
+                <h2 className="upload__subtitle">Metadata</h2>
+                <p className="upload__note">
+                  Subi el archivo de presiones de fondo en formato Excel para habilitar la carga.
+                </p>
+                <label className="upload__drop upload__drop--secondary">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setMetadataFile(file);
+                    }}
+                  />
+                  <span className="upload__title">Arrastra el metadata o hace click</span>
+                  <span className="upload__hint">Formato XLSX o XLS</span>
+                </label>
+                {metadataFile ? (
+                  <div className="upload__meta">
+                    <div>
+                      <strong>{metadataFile.name}</strong>
+                      <span>{formatNumber(metadataFile.size / 1024, 1)} KB</span>
+                    </div>
+                    <button type="button" className="upload__clear" onClick={() => setMetadataFile(null)}>
+                      Quitar
+                    </button>
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="upload__action"
+                  onClick={() => setUploadStep("form")}
+                  disabled={!selectedFile || !metadataFile}
+                >
+                  Cargar
+                </button>
+              </div>
+            ) : (
+              <div className="upload__card upload__card--wide">
+                <div className="upload__form-head">
+                  <div>
+                    <h1>Formulario de columnas</h1>
+                    <p>Completa los nombres exactos tal como aparecen en tu Excel.</p>
+                  </div>
+                  <button type="button" className="upload__clear" onClick={() => setUploadStep("select")}>
+                    Volver
                   </button>
                 </div>
-              ) : null}
-            </div>
+
+                <label className="form__field">
+                  <span>Cuantos pozos pasas</span>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Ej: 3"
+                    value={wellCount}
+                    onChange={(event) => setWellCount(event.target.value)}
+                  />
+                </label>
+
+                <div className="form__grid">
+                  {[
+                    {
+                      key: "presion_boca_psi",
+                      label: "presion_boca_psi (Presion Boca)"
+                    },
+                    {
+                      key: "presion_anular_psi",
+                      label: "presion_anular_psi (Presion Anular)"
+                    },
+                    {
+                      key: "orificio_mm",
+                      label: "orificio_mm (Orificio)"
+                    },
+                    {
+                      key: "temperatura_boca_c",
+                      label: "temperatura_boca_c (Temperatura)"
+                    },
+                    {
+                      key: "densidad_agua_kg_l",
+                      label: "densidad_agua_kg_l (Densidad AGUA)"
+                    },
+                    {
+                      key: "cloro_agua_g_l",
+                      label: "cloro_agua_g_l (CLORO)"
+                    },
+                    {
+                      key: "solidos_kg_hora",
+                      label: "solidos_kg_hora (Solidos kg/hora)"
+                    },
+                    {
+                      key: "solidos_l_hora",
+                      label: "solidos_l_hora (Solidos lts/hora)"
+                    },
+                    {
+                      key: "solidos_acum_kg",
+                      label: "solidos_acum_kg (Acumulado Solidos)"
+                    },
+                  ].map((field) => (
+                    <label key={field.key} className="form__field">
+                      <span>{field.label}</span>
+                      <input
+                        type="text"
+                        placeholder="Nombre exacto en el Excel"
+                        value={columnMap[field.key]}
+                        onChange={(event) =>
+                          setColumnMap((prev) => ({
+                            ...prev,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <button type="button" className="upload__action">
+                  Guardar configuracion
+                </button>
+              </div>
+            )}
           </section>
         ) : activeTab === "docs" ? (
           <section className="docs">

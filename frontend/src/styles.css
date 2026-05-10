@@ -130,6 +130,17 @@ button {
   gap: 16px;
 }
 
+.upload__card--wide {
+  width: min(980px, 100%);
+}
+
+.upload__form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .upload__card h1 {
   margin: 0;
   font-size: clamp(1.8rem, 3.2vw, 2.4rem);
@@ -140,6 +151,18 @@ button {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.upload__subtitle {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.upload__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 
 .upload__drop {
@@ -154,6 +177,11 @@ button {
   background: rgba(15, 154, 76, 0.05);
   color: var(--text);
   cursor: pointer;
+}
+
+.upload__drop--secondary {
+  border-color: rgba(13, 111, 214, 0.3);
+  background: rgba(13, 111, 214, 0.06);
 }
 
 .upload__drop input {
@@ -199,6 +227,55 @@ button {
   padding: 8px 14px;
   border-radius: 999px;
   font-weight: 600;
+}
+
+.upload__action {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, rgba(15, 154, 76, 0.9), rgba(95, 211, 198, 0.9));
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 16px 30px rgba(6, 32, 62, 0.12);
+}
+
+.upload__action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.upload__divider {
+  height: 1px;
+  width: 100%;
+  background: rgba(12, 73, 120, 0.12);
+  margin: 6px 0 2px;
+}
+
+.form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.form__field {
+  display: grid;
+  gap: 8px;
+}
+
+.form__field span {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.form__field input {
+  border-radius: 14px;
+  border: 1px solid rgba(12, 73, 120, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px 12px;
+  color: var(--text);
 }
 
 .docs {
@@ -897,6 +974,10 @@ button {
   .result-grid,
   .two-col,
   .docs__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form__grid {
     grid-template-columns: 1fr;
   }
 
