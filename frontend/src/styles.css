@@ -246,6 +246,18 @@ button {
   box-shadow: none;
 }
 
+.upload__status {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.upload__status--error {
+  background: rgba(219, 70, 37, 0.12);
+  border: 1px solid rgba(219, 70, 37, 0.22);
+  color: #8a2d1b;
+}
+
 .upload__divider {
   height: 1px;
   width: 100%;

@@ -129,6 +129,19 @@ const colors = {
   blue: "#7cb7ff",
 };
 
+type PreviewPayload = {
+  sheets: string[];
+  header_rows_detected: number;
+  columns: string[];
+  sample_rows: Array<Record<string, string>>;
+};
+
+type PreviewResponse = {
+  preview_id: string;
+  datos: PreviewPayload;
+  metadata: PreviewPayload;
+};
+
 
 function formatNumber(value: number, digits = 0): string {
   return new Intl.NumberFormat("es-AR", {
@@ -557,6 +570,12 @@ function App() {
   const [metadataFile, setMetadataFile] = useState<File | null>(null);
   const [uploadStep, setUploadStep] = useState<"select" | "form">("select");
   const [wellCount, setWellCount] = useState<string>("");
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewData, setPreviewData] = useState<PreviewResponse | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [columnMap, setColumnMap] = useState<Record<string, string>>({
     presion_boca_psi: "",
     presion_anular_psi: "",
@@ -568,6 +587,110 @@ function App() {
     solidos_l_hora: "",
     solidos_acum_kg: "",
   });
+
+  const handlePreviewUpload = async () => {
+    if (!selectedFile || !metadataFile) return;
+    setIsUploading(true);
+    setUploadError(null);
+
+    const payload = new FormData();
+    payload.append("datos", selectedFile);
+    payload.append("metadata", metadataFile);
+
+    try {
+      const response = await fetch("/api/uploads/preview", {
+        method: "POST",
+        body: payload,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Preview error: ${response.status}`);
+      }
+
+      const data = (await response.json()) as PreviewResponse;
+      console.log("POST /api/uploads/preview ok", data);
+      setPreviewId(data.preview_id);
+      setPreviewData(data);
+      setUploadStep("form");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al subir archivos";
+      console.error("POST /api/uploads/preview error", message);
+      setUploadError(message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSubmitConfig = async () => {
+    if (!previewId) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    const parsedWellCount = Math.max(1, Number(wellCount) || 1);
+    const datosSheet = previewData?.datos.sheets[0] ?? "";
+    const datosHeader = previewData?.datos.header_rows_detected ?? 1;
+    const metadataSheet = previewData?.metadata.sheets[0] ?? "";
+    const metadataHeader = previewData?.metadata.header_rows_detected ?? 1;
+
+    const config = {
+      datos: {
+        sheet: datosSheet,
+        header_rows: datosHeader,
+        mapping: {
+          fecha_hora: "FECHA Y HORA",
+          pozos: [
+            {
+              id: "pozo_1",
+              boca_psi: columnMap.presion_boca_psi,
+              anular_psi: columnMap.presion_anular_psi,
+              orificio_mm: columnMap.orificio_mm,
+              temperatura_boca_c: columnMap.temperatura_boca_c,
+              densidad_agua_kg_l: columnMap.densidad_agua_kg_l,
+              cloro_agua_g_l: columnMap.cloro_agua_g_l,
+              solidos_kg_hora: columnMap.solidos_kg_hora,
+              solidos_l_hora: columnMap.solidos_l_hora,
+              solidos_acum_kg: columnMap.solidos_acum_kg,
+              total_pozos: parsedWellCount,
+            },
+          ],
+        },
+      },
+      metadata: {
+        sheet: metadataSheet,
+        header_rows: metadataHeader,
+        mapping: {},
+      },
+      options: {
+        rolling_window: 12,
+        sensor_z_thresh: 4.0,
+        run_model: false,
+      },
+    };
+
+    const payload = new FormData();
+    payload.append("preview_id", previewId);
+    payload.append("config", JSON.stringify(config));
+
+    try {
+      const response = await fetch("/api/jobs", {
+        method: "POST",
+        body: payload,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Submit error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("POST /api/jobs ok", result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al enviar configuracion";
+      console.error("POST /api/jobs error", message);
+      setSubmitError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -666,6 +789,8 @@ function App() {
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
                       setSelectedFile(file);
+                      setPreviewId(null);
+                      setPreviewData(null);
                     }}
                   />
                   <span className="upload__title">Arrastra el archivo o hace click</span>
@@ -696,6 +821,8 @@ function App() {
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
                       setMetadataFile(file);
+                      setPreviewId(null);
+                      setPreviewData(null);
                     }}
                   />
                   <span className="upload__title">Arrastra el metadata o hace click</span>
@@ -713,13 +840,14 @@ function App() {
                   </div>
                 ) : null}
 
+                {uploadError ? <div className="upload__status upload__status--error">{uploadError}</div> : null}
                 <button
                   type="button"
                   className="upload__action"
-                  onClick={() => setUploadStep("form")}
-                  disabled={!selectedFile || !metadataFile}
+                  onClick={handlePreviewUpload}
+                  disabled={!selectedFile || !metadataFile || isUploading}
                 >
-                  Cargar
+                  {isUploading ? "Subiendo..." : "Cargar"}
                 </button>
               </div>
             ) : (
@@ -801,8 +929,9 @@ function App() {
                   ))}
                 </div>
 
-                <button type="button" className="upload__action">
-                  Guardar configuracion
+                {submitError ? <div className="upload__status upload__status--error">{submitError}</div> : null}
+                <button type="button" className="upload__action" onClick={handleSubmitConfig} disabled={isSubmitting || !previewId}>
+                  {isSubmitting ? "Enviando..." : "Guardar configuracion"}
                 </button>
               </div>
             )}
