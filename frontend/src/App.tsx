@@ -185,6 +185,38 @@ function classNames(...items: Array<string | false | undefined>): string {
   return items.filter(Boolean).join(" ");
 }
 
+function parseCsvHeaderLine(line: string): string[] {
+  const headers: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      const next = line[i + 1];
+      if (inQuotes && next === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      headers.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  if (current.length > 0) {
+    headers.push(current.trim());
+  }
+
+  return headers.filter((header) => header.length > 0);
+}
+
 
 function MetricCard({
   label,
@@ -572,6 +604,7 @@ function App() {
   const [wellCount, setWellCount] = useState<string>("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [csvColumns, setCsvColumns] = useState<string[]>([]);
   const [columnMap, setColumnMap] = useState<Record<string, string>>({
     presion_boca_psi: "",
     presion_anular_psi: "",
@@ -756,6 +789,16 @@ function App() {
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
                       setSelectedFile(file);
+                      setCsvColumns([]);
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          const text = String(reader.result ?? "");
+                          const firstLine = text.split(/\r?\n/)[0] ?? "";
+                          setCsvColumns(parseCsvHeaderLine(firstLine));
+                        };
+                        reader.readAsText(file);
+                      }
                       if (file && metadataFile) {
                         setUploadStep("form");
                       }
@@ -785,7 +828,7 @@ function App() {
                 <label className="upload__drop upload__drop--secondary">
                   <input
                     type="file"
-                    accept=".xlsx,.xls"
+                    accept=".xlsx"
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
                       setMetadataFile(file);
@@ -795,7 +838,7 @@ function App() {
                     }}
                   />
                   <span className="upload__title">Arrastra el metadata o hace click</span>
-                  <span className="upload__hint">Formato XLSX o XLS</span>
+                  <span className="upload__hint">Formato XLSX</span>
                 </label>
                 {metadataFile ? (
                   <div className="upload__meta">
@@ -882,9 +925,7 @@ function App() {
                   ].map((field) => (
                     <label key={field.key} className="form__field">
                       <span>{field.label}</span>
-                      <input
-                        type="text"
-                        placeholder="Nombre exacto en el Excel"
+                      <select
                         value={columnMap[field.key]}
                         onChange={(event) =>
                           setColumnMap((prev) => ({
@@ -892,7 +933,14 @@ function App() {
                             [field.key]: event.target.value,
                           }))
                         }
-                      />
+                      >
+                        <option value="">Seleccionar columna</option>
+                        {csvColumns.map((column) => (
+                          <option key={`${field.key}-${column}`} value={column}>
+                            {column}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   ))}
                 </div>
