@@ -777,15 +777,15 @@ function App() {
           <section className="upload">
             {uploadStep === "select" ? (
               <div className="upload__card">
-                <h1>Cargar archivo CSV</h1>
+                <h1>Cargar archivos XLSX</h1>
                 <p>
-                  Subi un CSV con el mismo formato del pipeline. La carga valida el archivo en el navegador y deja listo el envio cuando
+                  Subi los dos Excel con el mismo formato del pipeline. La carga valida el archivo en el navegador y deja listo el envio cuando
                   integremos el backend.
                 </p>
                 <label className="upload__drop">
                   <input
                     type="file"
-                    accept=".csv"
+                    accept=".xlsx"
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
                       setSelectedFile(file);
@@ -805,7 +805,7 @@ function App() {
                     }}
                   />
                   <span className="upload__title">Arrastra el archivo o hace click</span>
-                  <span className="upload__hint">Formato CSV, maximo 50 MB</span>
+                  <span className="upload__hint">Formato XLSX, maximo 50 MB</span>
                 </label>
                 {selectedFile ? (
                   <div className="upload__meta">
