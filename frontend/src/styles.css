@@ -201,6 +201,84 @@ button {
   font-weight: 600;
 }
 
+.docs {
+  display: grid;
+  place-items: center;
+  min-height: 70vh;
+}
+
+.docs__card {
+  width: min(980px, 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 248, 255, 0.96));
+  border: 1px solid rgba(12, 73, 120, 0.12);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 16px;
+}
+
+.docs__card h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  letter-spacing: -0.03em;
+}
+
+.docs__card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.docs__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.docs__block {
+  background: rgba(12, 73, 120, 0.05);
+  border: 1px solid rgba(12, 73, 120, 0.12);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.docs__block h2 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.docs__list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.docs__code {
+  margin: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(12, 73, 120, 0.08);
+  border: 1px solid rgba(12, 73, 120, 0.12);
+  overflow: auto;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--text);
+  max-height: 420px;
+}
+
+.docs__note {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(15, 154, 76, 0.12);
+  border: 1px solid rgba(15, 154, 76, 0.2);
+  color: #0f6a38;
+  font-weight: 600;
+}
+
 
 .orb {
   position: absolute;
@@ -817,7 +895,8 @@ button {
 @media (max-width: 1080px) {
   .hero,
   .result-grid,
-  .two-col {
+  .two-col,
+  .docs__grid {
     grid-template-columns: 1fr;
   }
 
