@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import tecpetrolLogo from "../logos/logo-tecpe.png";
 
 type PredictionRow = {
@@ -185,36 +186,14 @@ function classNames(...items: Array<string | false | undefined>): string {
   return items.filter(Boolean).join(" ");
 }
 
-function parseCsvHeaderLine(line: string): string[] {
-  const headers: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (char === '"') {
-      const next = line[i + 1];
-      if (inQuotes && next === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-    if (char === "," && !inQuotes) {
-      headers.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += char;
-  }
-
-  if (current.length > 0) {
-    headers.push(current.trim());
-  }
-
-  return headers.filter((header) => header.length > 0);
+function parseXlsxHeaders(buffer: ArrayBuffer): string[] {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheet = workbook.SheetNames[0];
+  if (!firstSheet) return [];
+  const worksheet = workbook.Sheets[firstSheet];
+  const rows = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, blankrows: false });
+  const headerRow = rows[0] ?? [];
+  return headerRow.map((cell) => String(cell).trim()).filter((cell) => cell.length > 0);
 }
 
 
@@ -793,11 +772,12 @@ function App() {
                       if (file) {
                         const reader = new FileReader();
                         reader.onload = () => {
-                          const text = String(reader.result ?? "");
-                          const firstLine = text.split(/\r?\n/)[0] ?? "";
-                          setCsvColumns(parseCsvHeaderLine(firstLine));
+                          const buffer = reader.result;
+                          if (buffer instanceof ArrayBuffer) {
+                            setCsvColumns(parseXlsxHeaders(buffer));
+                          }
                         };
-                        reader.readAsText(file);
+                        reader.readAsArrayBuffer(file);
                       }
                       if (file && metadataFile) {
                         setUploadStep("form");
