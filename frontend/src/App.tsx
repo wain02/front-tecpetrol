@@ -570,11 +570,7 @@ function App() {
   const [metadataFile, setMetadataFile] = useState<File | null>(null);
   const [uploadStep, setUploadStep] = useState<"select" | "form">("select");
   const [wellCount, setWellCount] = useState<string>("");
-  const [previewId, setPreviewId] = useState<string | null>(null);
-  const [previewData, setPreviewData] = useState<PreviewResponse | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [columnMap, setColumnMap] = useState<Record<string, string>>({
     presion_boca_psi: "",
@@ -588,49 +584,15 @@ function App() {
     solidos_acum_kg: "",
   });
 
-  const handlePreviewUpload = async () => {
-    if (!selectedFile || !metadataFile) return;
-    setIsUploading(true);
-    setUploadError(null);
-
-    const payload = new FormData();
-    payload.append("datos", selectedFile);
-    payload.append("metadata", metadataFile);
-
-    try {
-      const response = await fetch("/api/uploads/preview", {
-        method: "POST",
-        body: payload,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Preview error: ${response.status}`);
-      }
-
-      const data = (await response.json()) as PreviewResponse;
-      console.log("POST /api/uploads/preview ok", data);
-      setPreviewId(data.preview_id);
-      setPreviewData(data);
-      setUploadStep("form");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Error al subir archivos";
-      console.error("POST /api/uploads/preview error", message);
-      setUploadError(message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   const handleSubmitConfig = async () => {
-    if (!previewId) return;
     setIsSubmitting(true);
     setSubmitError(null);
 
     const parsedWellCount = Math.max(1, Number(wellCount) || 1);
-    const datosSheet = previewData?.datos.sheets[0] ?? "";
-    const datosHeader = previewData?.datos.header_rows_detected ?? 1;
-    const metadataSheet = previewData?.metadata.sheets[0] ?? "";
-    const metadataHeader = previewData?.metadata.header_rows_detected ?? 1;
+    const datosSheet = "";
+    const datosHeader = 1;
+    const metadataSheet = "";
+    const metadataHeader = 1;
 
     const config = {
       datos: {
@@ -668,7 +630,12 @@ function App() {
     };
 
     const payload = new FormData();
-    payload.append("preview_id", previewId);
+    if (selectedFile) {
+      payload.append("datos", selectedFile);
+    }
+    if (metadataFile) {
+      payload.append("metadata", metadataFile);
+    }
     payload.append("config", JSON.stringify(config));
 
     try {
@@ -789,8 +756,9 @@ function App() {
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
                       setSelectedFile(file);
-                      setPreviewId(null);
-                      setPreviewData(null);
+                      if (file && metadataFile) {
+                        setUploadStep("form");
+                      }
                     }}
                   />
                   <span className="upload__title">Arrastra el archivo o hace click</span>
@@ -821,8 +789,9 @@ function App() {
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
                       setMetadataFile(file);
-                      setPreviewId(null);
-                      setPreviewData(null);
+                      if (file && selectedFile) {
+                        setUploadStep("form");
+                      }
                     }}
                   />
                   <span className="upload__title">Arrastra el metadata o hace click</span>
@@ -840,14 +809,13 @@ function App() {
                   </div>
                 ) : null}
 
-                {uploadError ? <div className="upload__status upload__status--error">{uploadError}</div> : null}
                 <button
                   type="button"
                   className="upload__action"
-                  onClick={handlePreviewUpload}
-                  disabled={!selectedFile || !metadataFile || isUploading}
+                  onClick={() => setUploadStep("form")}
+                  disabled={!selectedFile || !metadataFile}
                 >
-                  {isUploading ? "Subiendo..." : "Cargar"}
+                  Cargar
                 </button>
               </div>
             ) : (
@@ -930,7 +898,7 @@ function App() {
                 </div>
 
                 {submitError ? <div className="upload__status upload__status--error">{submitError}</div> : null}
-                <button type="button" className="upload__action" onClick={handleSubmitConfig} disabled={isSubmitting || !previewId}>
+                <button type="button" className="upload__action" onClick={handleSubmitConfig} disabled={isSubmitting}>
                   {isSubmitting ? "Enviando..." : "Guardar configuracion"}
                 </button>
               </div>
