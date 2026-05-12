@@ -580,21 +580,44 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [metadataFile, setMetadataFile] = useState<File | null>(null);
   const [uploadStep, setUploadStep] = useState<"select" | "form">("select");
-  const [wellCount, setWellCount] = useState<string>("");
+  const [wellCount, setWellCount] = useState<string>("1");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
-  const [columnMap, setColumnMap] = useState<Record<string, string>>({
-    presion_boca_psi: "",
-    presion_anular_psi: "",
-    orificio_mm: "",
-    temperatura_boca_c: "",
-    densidad_agua_kg_l: "",
-    cloro_agua_g_l: "",
-    solidos_kg_hora: "",
-    solidos_l_hora: "",
-    solidos_acum_kg: "",
-  });
+    const updateWellCount = (value: number) => {
+      const safeValue = Math.min(3, Math.max(1, value));
+      setWellCount(String(safeValue));
+      setWellMappings((prev) => {
+        const next = [...prev];
+        while (next.length < safeValue) {
+          next.push({
+            presion_boca_psi: "",
+            presion_anular_psi: "",
+            orificio_mm: "",
+            temperatura_boca_c: "",
+            densidad_agua_kg_l: "",
+            cloro_agua_g_l: "",
+            solidos_kg_hora: "",
+            solidos_l_hora: "",
+            solidos_acum_kg: "",
+          });
+        }
+        return next.slice(0, safeValue);
+      });
+    };
+  const [wellMappings, setWellMappings] = useState<Array<Record<string, string>>>([
+    {
+      presion_boca_psi: "",
+      presion_anular_psi: "",
+      orificio_mm: "",
+      temperatura_boca_c: "",
+      densidad_agua_kg_l: "",
+      cloro_agua_g_l: "",
+      solidos_kg_hora: "",
+      solidos_l_hora: "",
+      solidos_acum_kg: "",
+    },
+  ]);
 
   const handleSubmitConfig = async () => {
     setIsSubmitting(true);
@@ -612,21 +635,18 @@ function App() {
         header_rows: datosHeader,
         mapping: {
           fecha_hora: "FECHA Y HORA",
-          pozos: [
-            {
-              id: "pozo_1",
-              boca_psi: columnMap.presion_boca_psi,
-              anular_psi: columnMap.presion_anular_psi,
-              orificio_mm: columnMap.orificio_mm,
-              temperatura_boca_c: columnMap.temperatura_boca_c,
-              densidad_agua_kg_l: columnMap.densidad_agua_kg_l,
-              cloro_agua_g_l: columnMap.cloro_agua_g_l,
-              solidos_kg_hora: columnMap.solidos_kg_hora,
-              solidos_l_hora: columnMap.solidos_l_hora,
-              solidos_acum_kg: columnMap.solidos_acum_kg,
-              total_pozos: parsedWellCount,
-            },
-          ],
+          pozos: wellMappings.slice(0, parsedWellCount).map((mapping, index) => ({
+            id: `pozo_${index + 1}`,
+            boca_psi: mapping.presion_boca_psi,
+            anular_psi: mapping.presion_anular_psi,
+            orificio_mm: mapping.orificio_mm,
+            temperatura_boca_c: mapping.temperatura_boca_c,
+            densidad_agua_kg_l: mapping.densidad_agua_kg_l,
+            cloro_agua_g_l: mapping.cloro_agua_g_l,
+            solidos_kg_hora: mapping.solidos_kg_hora,
+            solidos_l_hora: mapping.solidos_l_hora,
+            solidos_acum_kg: mapping.solidos_acum_kg,
+          })),
         },
       },
       metadata: {
@@ -853,77 +873,95 @@ function App() {
                   </button>
                 </div>
 
-                <label className="form__field">
-                  <span>Cuantos pozos pasas</span>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Ej: 3"
-                    value={wellCount}
-                    onChange={(event) => setWellCount(event.target.value)}
-                  />
-                </label>
-
-                <div className="form__grid">
-                  {[
-                    {
-                      key: "presion_boca_psi",
-                      label: "presion_boca_psi (Presion Boca)"
-                    },
-                    {
-                      key: "presion_anular_psi",
-                      label: "presion_anular_psi (Presion Anular)"
-                    },
-                    {
-                      key: "orificio_mm",
-                      label: "orificio_mm (Orificio)"
-                    },
-                    {
-                      key: "temperatura_boca_c",
-                      label: "temperatura_boca_c (Temperatura)"
-                    },
-                    {
-                      key: "densidad_agua_kg_l",
-                      label: "densidad_agua_kg_l (Densidad AGUA)"
-                    },
-                    {
-                      key: "cloro_agua_g_l",
-                      label: "cloro_agua_g_l (CLORO)"
-                    },
-                    {
-                      key: "solidos_kg_hora",
-                      label: "solidos_kg_hora (Solidos kg/hora)"
-                    },
-                    {
-                      key: "solidos_l_hora",
-                      label: "solidos_l_hora (Solidos lts/hora)"
-                    },
-                    {
-                      key: "solidos_acum_kg",
-                      label: "solidos_acum_kg (Acumulado Solidos)"
-                    },
-                  ].map((field) => (
-                    <label key={field.key} className="form__field">
-                      <span>{field.label}</span>
-                      <select
-                        value={columnMap[field.key]}
-                        onChange={(event) =>
-                          setColumnMap((prev) => ({
-                            ...prev,
-                            [field.key]: event.target.value,
-                          }))
-                        }
+                <div className="form__field">
+                  <span>Cuantos pozos pasas (max 3)</span>
+                  <div className="stepper">
+                    {[1, 2, 3].map((step) => (
+                      <button
+                        key={step}
+                        type="button"
+                        className={classNames("stepper__dot", Number(wellCount) === step && "stepper__dot--active")}
+                        onClick={() => updateWellCount(step)}
+                        aria-label={`Seleccionar ${step} pozo${step > 1 ? "s" : ""}`}
                       >
-                        <option value="">Seleccionar columna</option>
-                        {csvColumns.map((column) => (
-                          <option key={`${field.key}-${column}`} value={column}>
-                            {column}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
+                        <span>{step}</span>
+                      </button>
+                    ))}
+                    <div className="stepper__line" aria-hidden="true" />
+                  </div>
                 </div>
+
+                {wellMappings.map((mapping, wellIndex) => (
+                  <div key={`pozo-${wellIndex}`} className="form__section">
+                    <h2 className="form__section-title">Pozo {wellIndex + 1}</h2>
+                    <div className="form__grid">
+                      {[
+                        {
+                          key: "presion_boca_psi",
+                          label: "presion_boca_psi (Presion Boca)"
+                        },
+                        {
+                          key: "presion_anular_psi",
+                          label: "presion_anular_psi (Presion Anular)"
+                        },
+                        {
+                          key: "orificio_mm",
+                          label: "orificio_mm (Orificio)"
+                        },
+                        {
+                          key: "temperatura_boca_c",
+                          label: "temperatura_boca_c (Temperatura)"
+                        },
+                        {
+                          key: "densidad_agua_kg_l",
+                          label: "densidad_agua_kg_l (Densidad AGUA)"
+                        },
+                        {
+                          key: "cloro_agua_g_l",
+                          label: "cloro_agua_g_l (CLORO)"
+                        },
+                        {
+                          key: "solidos_kg_hora",
+                          label: "solidos_kg_hora (Solidos kg/hora)"
+                        },
+                        {
+                          key: "solidos_l_hora",
+                          label: "solidos_l_hora (Solidos lts/hora)"
+                        },
+                        {
+                          key: "solidos_acum_kg",
+                          label: "solidos_acum_kg (Acumulado Solidos)"
+                        },
+                      ].map((field) => (
+                        <label key={`${field.key}-${wellIndex}`} className="form__field">
+                          <span>{field.label}</span>
+                          <select
+                            value={mapping[field.key]}
+                            onChange={(event) =>
+                              setWellMappings((prev) =>
+                                prev.map((item, index) =>
+                                  index === wellIndex
+                                    ? {
+                                        ...item,
+                                        [field.key]: event.target.value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <option value="">Seleccionar columna</option>
+                            {csvColumns.map((column) => (
+                              <option key={`${field.key}-${wellIndex}-${column}`} value={column}>
+                                {column}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
 
                 {submitError ? <div className="upload__status upload__status--error">{submitError}</div> : null}
                 <button type="button" className="upload__action" onClick={handleSubmitConfig} disabled={isSubmitting}>
