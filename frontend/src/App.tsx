@@ -584,6 +584,7 @@ function App() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
+  const columnsListId = "csv-columns-list";
     const updateWellCount = (value: number) => {
       const safeValue = Math.min(3, Math.max(1, value));
       setWellCount(String(safeValue));
@@ -935,7 +936,10 @@ function App() {
                       ].map((field) => (
                         <label key={`${field.key}-${wellIndex}`} className="form__field">
                           <span>{field.label}</span>
-                          <select
+                          <input
+                            type="text"
+                            list={columnsListId}
+                            placeholder="Escribir y seleccionar"
                             value={mapping[field.key]}
                             onChange={(event) =>
                               setWellMappings((prev) =>
@@ -949,19 +953,17 @@ function App() {
                                 ),
                               )
                             }
-                          >
-                            <option value="">Seleccionar columna</option>
-                            {csvColumns.map((column) => (
-                              <option key={`${field.key}-${wellIndex}-${column}`} value={column}>
-                                {column}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </label>
                       ))}
                     </div>
                   </div>
                 ))}
+                <datalist id={columnsListId}>
+                  {csvColumns.map((column) => (
+                    <option key={`column-${column}`} value={column} />
+                  ))}
+                </datalist>
 
                 {submitError ? <div className="upload__status upload__status--error">{submitError}</div> : null}
                 <button type="button" className="upload__action" onClick={handleSubmitConfig} disabled={isSubmitting}>

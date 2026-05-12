@@ -345,14 +345,6 @@ button {
   color: var(--text);
 }
 
-.form__field select {
-  border-radius: 14px;
-  border: 1px solid rgba(12, 73, 120, 0.16);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 10px 12px;
-  color: var(--text);
-}
-
 .docs {
   display: grid;
   place-items: center;
