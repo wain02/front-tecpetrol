@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { supabase } from "./lib/supabase";
 import tecpetrolLogo from "../logos/logo-tecpe.png";
 
 type PredictionRow = {
@@ -582,6 +583,7 @@ function App() {
   const [uploadStep, setUploadStep] = useState<"select" | "form">("select");
   const [wellCount, setWellCount] = useState<string>("1");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
   const columnsListId = "csv-columns-list";
@@ -623,6 +625,7 @@ function App() {
   const handleSubmitConfig = async () => {
     setIsSubmitting(true);
     setSubmitError(null);
+    setSubmitSuccess(null);
 
     const parsedWellCount = Math.max(1, Number(wellCount) || 1);
     const datosSheet = "";
@@ -662,30 +665,42 @@ function App() {
       },
     };
 
-    const payload = new FormData();
-    if (selectedFile) {
-      payload.append("datos", selectedFile);
-    }
-    if (metadataFile) {
-      payload.append("metadata", metadataFile);
-    }
-    payload.append("config", JSON.stringify(config));
-
     try {
-      const response = await fetch("/api/jobs", {
-        method: "POST",
-        body: payload,
-      });
+      const bucketName = "tppstorage";
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 
-      if (!response.ok) {
-        throw new Error(`Submit error: ${response.status}`);
+      if (!selectedFile || !metadataFile) {
+        throw new Error("Faltan archivos para subir a Supabase");
       }
 
-      const result = await response.json();
-      console.log("POST /api/jobs ok", result);
+      const datosPath = `uploads/${timestamp}-${selectedFile.name}`;
+      const metadataPath = `uploads/${timestamp}-${metadataFile.name}`;
+      const jsonPath = `uploads/${timestamp}-config.json`;
+      const configBlob = new Blob([JSON.stringify({ config, wellCount })], { type: "application/json" });
+
+      const [datosUpload, metadataUpload, jsonUpload] = await Promise.all([
+        supabase.storage.from(bucketName).upload(datosPath, selectedFile, { upsert: false }),
+        supabase.storage.from(bucketName).upload(metadataPath, metadataFile, { upsert: false }),
+        supabase.storage.from(bucketName).upload(jsonPath, configBlob, { upsert: false, contentType: "application/json" }),
+      ]);
+
+      if (datosUpload.error || metadataUpload.error || jsonUpload.error) {
+        const message =
+          datosUpload.error?.message || metadataUpload.error?.message || jsonUpload.error?.message || "Error al subir archivos";
+        throw new Error(message);
+      }
+
+      console.log("Supabase uploads ok", {
+        datosPath,
+        metadataPath,
+        jsonPath,
+      });
+
+      console.log("Supabase flow ok - backend POST skipped");
+      setSubmitSuccess("Archivos y configuracion subidos correctamente.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error al enviar configuracion";
-      console.error("POST /api/jobs error", message);
+      console.error("Supabase upload error", message);
       setSubmitError(message);
     } finally {
       setIsSubmitting(false);
@@ -966,6 +981,7 @@ function App() {
                 </datalist>
 
                 {submitError ? <div className="upload__status upload__status--error">{submitError}</div> : null}
+                {submitSuccess ? <div className="upload__status upload__status--success">{submitSuccess}</div> : null}
                 <button type="button" className="upload__action" onClick={handleSubmitConfig} disabled={isSubmitting}>
                   {isSubmitting ? "Enviando..." : "Guardar configuracion"}
                 </button>

@@ -258,6 +258,12 @@ button {
   color: #8a2d1b;
 }
 
+.upload__status--success {
+  background: rgba(15, 154, 76, 0.12);
+  border: 1px solid rgba(15, 154, 76, 0.2);
+  color: #0f6a38;
+}
+
 .upload__divider {
   height: 1px;
   width: 100%;
