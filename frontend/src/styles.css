@@ -899,6 +899,18 @@ button {
   font-size: 0.84rem;
 }
 
+.xy-chart__axis {
+  font-weight: 600;
+}
+
+.xy-chart__axis--x {
+  text-align: right;
+}
+
+.xy-chart__axis--y {
+  text-align: left;
+}
+
 .extrap-table-wrap {
   overflow: auto;
   border-radius: 18px;
@@ -1290,6 +1302,15 @@ button {
   .well-carousel {
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     gap: 10px;
+  }
+
+  .xy-chart__labels {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .xy-chart__axis--x {
+    text-align: left;
   }
 
 }

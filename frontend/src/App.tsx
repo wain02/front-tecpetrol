@@ -902,8 +902,8 @@ function XYChart({
       </div>
 
       <div className="xy-chart__labels">
-        <span>{xLabel}</span>
-        <span>{yLabel}</span>
+        <span className="xy-chart__axis xy-chart__axis--y">Eje Y: {yLabel}</span>
+        <span className="xy-chart__axis xy-chart__axis--x">Eje X: {xLabel}</span>
       </div>
     </div>
   );
