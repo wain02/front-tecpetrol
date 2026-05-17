@@ -131,6 +131,93 @@ const colors = {
   blue: "#7cb7ff",
 };
 
+type ExtrapolacionEvento = {
+  pad_id: string;
+  pozo_id: string;
+  timestamp_evento: string;
+  tipo_evento: string;
+  N_puntos: number;
+  tp_horas: number | null;
+  P_primer_dato: number;
+  P_estimada_exp: number;
+  R2_exp: number;
+  params_exp: {
+    P_estable: number;
+    A: number;
+    k: number;
+  };
+  P_estimada_semilog: number;
+  R2_semilog: number;
+  P_estrella_horner: number | null;
+  m_horner: number | null;
+  R2_horner: number | null;
+  delta_vs_primer_dato_exp: number;
+  delta_vs_primer_dato_semilog: number;
+  t_rel?: number[];
+  p_obs?: number[];
+  a_slog?: number | null;
+  b_slog?: number | null;
+};
+
+type ExtrapolationGroup = {
+  key: string;
+  rows: ExtrapolacionEvento[];
+  best: ExtrapolacionEvento;
+  score: number;
+  label: string;
+};
+
+type AnalisisFirma = {
+  pad_id: string;
+  pozo_id: string;
+  t_inicio: string;
+  t_fin: string;
+  tipo_segmento: string;
+  duracion_horas: number;
+  p_media: number;
+  p_std: number;
+  p_rango: number;
+  delta_total: number;
+  tasa_cambio_media: number;
+  r2_lineal: number;
+  r2_exponencial: number;
+  n_picos_total: number;
+  n_oscilaciones: number;
+  cluster: number | null;
+};
+
+type PresionT0Pad = {
+  pad_id: string;
+  pozo_id: string;
+  t_cero_pad: string;
+  t_primera_apertura: string | null;
+  horas_buildup_inicial: number | null;
+  n_puntos_cerrado: number;
+  P_t0_medido: number;
+  P_t0_lineal: number | null;
+  R2_lineal: number | null;
+  P_pre_apertura: number | null;
+  P_fondo_metadata_cercana: number | null;
+  notas: string;
+};
+
+type PresionBoca = {
+  pad_id: string;
+  pozo_id: string;
+  timestamp: string;
+  presion_boca_psi: number | null;
+  presion_anular_psi: number | null;
+  P_hidro_boca_psi: number | null;
+};
+
+type PresionFondo = {
+  pad_id: string;
+  pozo_id: string;
+  fecha_medicion: string;
+  presion_psia: number;
+  P_hidro_fondo_psia: number | null;
+};
+
 type PreviewPayload = {
   sheets: string[];
   header_rows_detected: number;
@@ -195,6 +282,162 @@ function parseXlsxHeaders(buffer: ArrayBuffer): string[] {
   const rows = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, blankrows: false });
   const headerRow = rows[0] ?? [];
   return headerRow.map((cell) => String(cell).trim()).filter((cell) => cell.length > 0);
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Fetch error ${response.status} for ${url}`);
+  }
+  return (await response.json()) as T;
+}
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+function apiUrl(path: string, params?: Record<string, string>): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const query = params ? `?${new URLSearchParams(params).toString()}` : "";
+
+  if (apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")) {
+    return new URL(`${normalizedPath}${query}`, apiBaseUrl).toString();
+  }
+
+  const normalizedBase = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+  return `${normalizedBase}${normalizedPath}${query}`;
+}
+
+function fillMissing(values: Array<number | null | undefined>): number[] {
+  let lastValue = 0;
+  return values.map((value) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      lastValue = value;
+      return value;
+    }
+    return lastValue;
+  });
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function fitSemilog(points: Array<{ x: number; y: number }>): { a: number; b: number; r2: number } | null {
+  const filtered = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  if (filtered.length < 2) return null;
+
+  const xs = filtered.map((point) => Math.log(Math.max(point.x, 0) + 0.5));
+  const ys = filtered.map((point) => point.y);
+  const n = filtered.length;
+  const sumX = xs.reduce((sum, value) => sum + value, 0);
+  const sumY = ys.reduce((sum, value) => sum + value, 0);
+  const sumXX = xs.reduce((sum, value) => sum + value * value, 0);
+  const sumXY = xs.reduce((sum, value, index) => sum + value * ys[index], 0);
+  const denominator = n * sumXX - sumX * sumX;
+  if (Math.abs(denominator) < 1e-12) return null;
+
+  const a = (n * sumXY - sumX * sumY) / denominator;
+  const b = (sumY - a * sumX) / n;
+  const predicted = xs.map((x) => a * x + b);
+  const yMean = mean(ys);
+  const ssTot = ys.reduce((sum, value) => sum + (value - yMean) ** 2, 0);
+  const ssRes = ys.reduce((sum, value, index) => sum + (value - predicted[index]) ** 2, 0);
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+
+  return { a, b, r2 };
+}
+
+function formatEventLabel(event: ExtrapolacionEvento): string {
+  return `${event.pozo_id} ${event.tipo_evento} ${formatDateTime(event.timestamp_evento)}`;
+}
+
+function buildEventKey(event: Pick<ExtrapolacionEvento, "pozo_id" | "timestamp_evento" | "tipo_evento">): string {
+  return `${event.pozo_id}-${event.timestamp_evento}-${event.tipo_evento}`;
+}
+
+function getPressureValue(row: PresionBoca): number | null {
+  return row.presion_boca_psi ?? row.presion_anular_psi ?? row.P_hidro_boca_psi ?? null;
+}
+
+function buildPressureSeriesForEvent(
+  event: ExtrapolacionEvento,
+  bocaByPozo: Array<{ pozo: string; items: PresionBoca[] }>,
+): Array<{ x: number; y: number }> {
+  const source = bocaByPozo.find((item) => item.pozo === event.pozo_id)?.items ?? [];
+  if (source.length === 0) return [];
+
+  const start = new Date(event.timestamp_evento).getTime();
+  const targetCount = Math.max(event.N_puntos, 12);
+
+  return source
+    .filter((row) => new Date(row.timestamp).getTime() >= start)
+    .slice(0, targetCount)
+    .map((row) => {
+      const value = getPressureValue(row);
+      return {
+        x: Math.max((new Date(row.timestamp).getTime() - start) / 3_600_000, 0),
+        y: value ?? 0,
+      };
+    })
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+}
+
+function selectBestWindow(rows: ExtrapolacionEvento[]): ExtrapolacionEvento {
+  return [...rows].sort((a, b) => {
+    const scoreA = mean([a.R2_exp, a.R2_semilog].filter(isFiniteNumber));
+    const scoreB = mean([b.R2_exp, b.R2_semilog].filter(isFiniteNumber));
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return a.N_puntos - b.N_puntos;
+  })[0];
+}
+
+function buildCurvePoints(row: ExtrapolacionEvento, sourcePoints: Array<{ x: number; y: number }>, sampleCount = 120) {
+  const xs = sourcePoints.map((point) => point.x).filter((value) => Number.isFinite(value));
+  const minX = Math.min(0, ...xs);
+  const maxX = Math.max(...xs, row.tp_horas ?? 0);
+  const span = Math.max(maxX - minX, 1);
+  const step = span / Math.max(sampleCount - 1, 1);
+
+  return Array.from({ length: sampleCount }, (_, index) => {
+    const x = minX + index * step;
+    return {
+      x,
+      exp: row.params_exp.P_estable + row.params_exp.A * Math.exp(-row.params_exp.k * Math.max(x, 0)),
+      semilog: row.a_slog != null && row.b_slog != null ? row.a_slog * Math.log(Math.max(x, 0) + 0.5) + row.b_slog : null,
+    };
+  });
+}
+
+function buildHornerPoints(row: ExtrapolacionEvento, sourcePoints: Array<{ x: number; y: number }>) {
+  if (row.tp_horas == null || row.P_estrella_horner == null || row.m_horner == null) return null;
+  const points = sourcePoints
+    .filter((point) => point.x > 0)
+    .map((point) => ({
+      x: Math.log10((row.tp_horas! + point.x) / point.x),
+      y: point.y,
+    }));
+  if (points.length === 0) return null;
+
+  const xs = points.map((point) => point.x);
+  const minX = Math.min(...xs, 0);
+  const maxX = Math.max(...xs);
+  const line = Array.from({ length: 80 }, (_, index) => {
+    const x = minX + ((maxX - minX) * index) / 79;
+    return {
+      x,
+      y: row.P_estrella_horner! - row.m_horner! * x,
+    };
+  });
+
+  return {
+    points,
+    line,
+    star: { x: 0, y: row.P_estrella_horner },
+  };
 }
 
 
@@ -504,6 +747,329 @@ function BarList({
   );
 }
 
+type XYSeries = {
+  name: string;
+  color: string;
+  points: Array<{ x: number; y: number }>;
+  strokeDasharray?: string;
+  showPoints?: boolean;
+  strokeWidth?: number;
+  pointRadius?: number;
+};
+
+type XYChartReferenceLine = {
+  axis: "x" | "y";
+  value: number;
+  label: string;
+  color: string;
+  dashed?: boolean;
+};
+
+function XYChart({
+  series,
+  referenceLines,
+  xLabel,
+  yLabel,
+  ariaLabel,
+  height = 360,
+}: {
+  series: XYSeries[];
+  referenceLines?: XYChartReferenceLine[];
+  xLabel: string;
+  yLabel: string;
+  ariaLabel: string;
+  height?: number;
+}) {
+  const width = 980;
+  const padding = { top: 28, right: 28, bottom: 60, left: 70 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const allX = series.flatMap((item) => item.points.map((point) => point.x)).concat(referenceLines?.filter((line) => line.axis === "x").map((line) => line.value) ?? []);
+  const allY = series.flatMap((item) => item.points.map((point) => point.y)).concat(referenceLines?.filter((line) => line.axis === "y").map((line) => line.value) ?? []);
+  const minX = Math.min(...allX, 0);
+  const maxX = Math.max(...allX, 1);
+  const minY = Math.min(...allY);
+  const maxY = Math.max(...allY);
+  const xPad = Math.abs(maxX - minX) * 0.08 || 1;
+  const yPad = Math.abs(maxY - minY) * 0.08 || 1;
+  const domainX = [minX - xPad, maxX + xPad] as const;
+  const domainY = [minY - yPad, maxY + yPad] as const;
+  const xScale = (value: number) => padding.left + ((value - domainX[0]) / (domainX[1] - domainX[0] || 1)) * chartWidth;
+  const yScale = (value: number) => padding.top + (1 - (value - domainY[0]) / (domainY[1] - domainY[0] || 1)) * chartHeight;
+  const xTicks = Array.from({ length: 5 }, (_, index) => domainX[0] + ((domainX[1] - domainX[0]) / 4) * index);
+  const yTicks = Array.from({ length: 5 }, (_, index) => domainY[0] + ((domainY[1] - domainY[0]) / 4) * index);
+
+  const buildPath = (points: Array<{ x: number; y: number }>) =>
+    points
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+      .sort((a, b) => a.x - b.x)
+      .map((point, index) => {
+        const x = xScale(point.x);
+        const y = yScale(point.y);
+        return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+      })
+      .join(" ");
+
+  return (
+    <div className="xy-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel}>
+        {yTicks.map((tick) => {
+          const y = yScale(tick);
+          return (
+            <g key={`y-${tick}`}>
+              <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke={colors.line} strokeDasharray="6 10" />
+              <text x={padding.left - 12} y={y + 4} textAnchor="end" className="chart__axis-label">
+                {formatNumber(tick, 0)}
+              </text>
+            </g>
+          );
+        })}
+
+        {xTicks.map((tick) => {
+          const x = xScale(tick);
+          return (
+            <g key={`x-${tick}`}>
+              <line x1={x} x2={x} y1={padding.top} y2={height - padding.bottom} stroke={colors.line} strokeDasharray="2 8" opacity="0.45" />
+              <text x={x} y={height - 16} textAnchor="middle" className="chart__axis-label">
+                {formatNumber(tick, 1)}
+              </text>
+            </g>
+          );
+        })}
+
+        {referenceLines?.map((line) => {
+          const position = line.axis === "x" ? xScale(line.value) : yScale(line.value);
+          return line.axis === "x" ? (
+            <g key={line.label}>
+              <line
+                x1={position}
+                x2={position}
+                y1={padding.top}
+                y2={height - padding.bottom}
+                stroke={line.color}
+                strokeDasharray={line.dashed ? "4 8" : "none"}
+              />
+              <text x={position + 6} y={padding.top + 14} textAnchor="start" className="chart__threshold">
+                {line.label}
+              </text>
+            </g>
+          ) : (
+            <g key={line.label}>
+              <line
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={position}
+                y2={position}
+                stroke={line.color}
+                strokeDasharray={line.dashed ? "4 8" : "none"}
+              />
+              <text x={width - padding.right} y={position - 8} textAnchor="end" className="chart__threshold">
+                {line.label}
+              </text>
+            </g>
+          );
+        })}
+
+        {series.map((item) => {
+          const path = buildPath(item.points);
+          return (
+            <g key={item.name}>
+              {path ? <path d={path} fill="none" stroke={item.color} strokeWidth={item.strokeWidth ?? 3.2} strokeDasharray={item.strokeDasharray} strokeLinecap="round" strokeLinejoin="round" /> : null}
+              {item.showPoints !== false
+                ? item.points.map((point, index) => (
+                    <circle
+                      key={`${item.name}-${index}`}
+                      cx={xScale(point.x)}
+                      cy={yScale(point.y)}
+                      r={item.pointRadius ?? 3.6}
+                      fill={item.color}
+                      opacity="0.9"
+                    />
+                  ))
+                : null}
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="chart__legend">
+        {series.map((item) => (
+          <div key={item.name} className="chart__legend-item">
+            <span className="chart__legend-swatch" style={{ background: item.color }} />
+            <span>{item.name}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="xy-chart__labels">
+        <span>{xLabel}</span>
+        <span>{yLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+function ExtrapolationTable({
+  groups,
+  selectedKey,
+  onSelect,
+}: {
+  groups: ExtrapolationGroup[];
+  selectedKey: string | null;
+  onSelect: (key: string) => void;
+}) {
+  const metrics: Array<{ label: string; getter: (event: ExtrapolacionEvento) => string }> = [
+    { label: "Puntos tomados", getter: (event) => String(event.N_puntos) },
+    { label: "P(t=0) exp", getter: (event) => formatNumber(event.P_estimada_exp, 1) },
+    { label: "R2 exp", getter: (event) => formatNumber(event.R2_exp, 3) },
+    { label: "P(t=0) semilog", getter: (event) => formatNumber(event.P_estimada_semilog, 1) },
+    { label: "R2 semilog", getter: (event) => formatNumber(event.R2_semilog, 3) },
+    { label: "P* Horner", getter: (event) => (event.P_estrella_horner == null ? "-" : formatNumber(event.P_estrella_horner, 1)) },
+    { label: "m Horner", getter: (event) => (event.m_horner == null ? "-" : formatNumber(event.m_horner, 1)) },
+    { label: "R2 Horner", getter: (event) => (event.R2_horner == null ? "-" : formatNumber(event.R2_horner, 3)) },
+    { label: "Delta exp", getter: (event) => formatNumber(event.delta_vs_primer_dato_exp, 1) },
+    { label: "Delta semilog", getter: (event) => formatNumber(event.delta_vs_primer_dato_semilog, 1) },
+  ];
+
+  return (
+    <div className="extrap-table-wrap">
+      <table className="extrap-table">
+        <thead>
+          <tr>
+            <th className="extrap-table__stub">Metrica</th>
+            {groups.map((group) => {
+              const active = group.key === selectedKey;
+              return (
+                <th key={group.key} className={classNames("extrap-table__event", active && "extrap-table__event--active")}>
+                  <button type="button" onClick={() => onSelect(group.key)} className="extrap-table__button">
+                    <span className="extrap-table__pozo">{group.best.pozo_id}</span>
+                    <strong>{formatDateTime(group.best.timestamp_evento)}</strong>
+                    <span>{group.best.tipo_evento}</span>
+                  </button>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.map(({ label, getter }) => (
+            <tr key={label}>
+              <th scope="row" className="extrap-table__stub">
+                {label}
+              </th>
+              {groups.map((group) => {
+                const active = group.key === selectedKey;
+                return (
+                  <td key={`${group.key}-${label}`} className={classNames(active && "extrap-table__cell--active")}>
+                    {getter(group.best)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ExtrapolationEventCard({
+  event,
+  pressureSeries,
+}: {
+  event: ExtrapolationGroup;
+  pressureSeries: Array<{ x: number; y: number }>;
+}) {
+  const fitPoints = pressureSeries.length > 0 ? buildCurvePoints(event.best, pressureSeries) : [];
+  const semilogFit = fitSemilog(pressureSeries);
+  const expLine = fitPoints.map((point) => ({ x: point.x, y: point.exp }));
+  const semilogLine = semilogFit ? fitPoints.map((point) => ({ x: point.x, y: semilogFit.a * Math.log(Math.max(point.x, 0) + 0.5) + semilogFit.b })) : [];
+  const selectedSemilog = semilogLine.length > 1;
+  const horner = buildHornerPoints(event.best, pressureSeries);
+
+  const cards = [
+    { label: "P(t=0) exp", value: formatNumber(event.best.P_estimada_exp, 1) },
+    { label: "R2 exp", value: formatNumber(event.best.R2_exp, 3) },
+    { label: "P(t=0) semilog", value: formatNumber(event.best.P_estimada_semilog, 1) },
+    { label: "R2 semilog", value: formatNumber(event.best.R2_semilog, 3) },
+  ];
+  const hornerReferenceLines =
+    event.best.P_estrella_horner != null
+      ? [
+          {
+            axis: "y" as const,
+            value: event.best.P_estrella_horner,
+            label: `P* = ${formatNumber(event.best.P_estrella_horner, 1)} psi`,
+            color: "#16a34a",
+            dashed: true,
+          },
+        ]
+      : [];
+
+  return (
+    <article className="extrap-card">
+      <div className="extrap-card__head">
+        <div>
+          <h3>{formatEventLabel(event.best)}</h3>
+          <p>
+            N={event.best.N_puntos} puntos {event.best.tp_horas != null ? `| tp = ${formatNumber(event.best.tp_horas, 1)} h` : "| sin tp"}
+            {event.best.P_estrella_horner != null && event.best.m_horner != null
+              ? ` | Horner R2 = ${formatNumber(event.best.R2_horner ?? 0, 3)}`
+              : ""}
+          </p>
+        </div>
+        <Chip tone={event.best.tipo_evento === "cierre" ? "success" : "accent"}>{event.best.tipo_evento}</Chip>
+      </div>
+
+      <div className="metric-strip metric-strip--3 metric-strip--dense">
+        {cards.map((card) => (
+          <MetricCard key={card.label} label={card.label} value={card.value} hint={event.best.pad_id} />
+        ))}
+      </div>
+
+      <div className="extrap-card__charts">
+        <XYChart
+          ariaLabel={`Curva de extrapolacion ${formatEventLabel(event.best)}`}
+          xLabel="Tiempo relativo al evento (horas)"
+          yLabel="Presion (psi)"
+          series={[
+            { name: "Observado", color: colors.blue, points: pressureSeries, showPoints: true, strokeWidth: 0, pointRadius: 4 },
+            { name: "Exponencial", color: "#1f4bd8", points: expLine, showPoints: false, strokeWidth: 3.4 },
+            ...(selectedSemilog
+              ? [{ name: "Semilog", color: "#ef4444", points: semilogLine, showPoints: false, strokeDasharray: "10 7", strokeWidth: 3.2 }]
+              : []),
+          ]}
+          referenceLines={[
+            { axis: "x", value: 0, label: "t = 0", color: colors.line, dashed: true },
+            { axis: "y", value: event.best.P_estimada_exp, label: `P(0) exp = ${formatNumber(event.best.P_estimada_exp, 1)}`, color: "#1f4bd8", dashed: true },
+            { axis: "y", value: event.best.P_estimada_semilog, label: `P(0) slog = ${formatNumber(event.best.P_estimada_semilog, 1)}`, color: "#ef4444", dashed: true },
+          ]}
+        />
+
+        {horner ? (
+          <XYChart
+            ariaLabel={`Grafico Horner ${formatEventLabel(event.best)}`}
+            xLabel="log10[(tp + dt) / dt]"
+            yLabel="Presion (psi)"
+            height={330}
+            series={[
+              { name: "Buildup observado", color: colors.accent, points: horner.points, showPoints: true, strokeWidth: 0, pointRadius: 4.5 },
+              { name: "Ajuste Horner", color: "#111827", points: horner.line, showPoints: false, strokeWidth: 3.2 },
+              { name: "P*", color: "#16a34a", points: [horner.star], showPoints: true, strokeWidth: 0, pointRadius: 7 },
+            ]}
+            referenceLines={hornerReferenceLines}
+          />
+        ) : (
+          <div className="extrap-card__empty">
+            <strong>Horner no disponible</strong>
+            <span>Este evento no tiene tp_horas ni parametros de Horner.</span>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function ModelCard({
   model,
   active,
@@ -575,8 +1141,6 @@ function LoadingState() {
 }
 
 function App() {
-  const [report, setReport] = useState<ReportData | null>(null);
-  const [selectedModel, setSelectedModel] = useState<ModelKey>("rf");
   const [activeTab, setActiveTab] = useState<"dashboard" | "upload" | "docs">("dashboard");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [metadataFile, setMetadataFile] = useState<File | null>(null);
@@ -586,6 +1150,14 @@ function App() {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [csvColumns, setCsvColumns] = useState<string[]>([]);
+  const [extrapolacion, setExtrapolacion] = useState<ExtrapolacionEvento[]>([]);
+  const [analisisFirmas, setAnalisisFirmas] = useState<AnalisisFirma[]>([]);
+  const [presionT0, setPresionT0] = useState<PresionT0Pad[]>([]);
+  const [presionBoca, setPresionBoca] = useState<PresionBoca[]>([]);
+  const [presionFondo, setPresionFondo] = useState<PresionFondo[]>([]);
+  const [apiLoading, setApiLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [selectedExtrapolationKey, setSelectedExtrapolationKey] = useState<string | null>(null);
   const columnsListId = "csv-columns-list";
     const updateWellCount = (value: number) => {
       const safeValue = Math.min(3, Math.max(1, value));
@@ -709,50 +1281,145 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    fetch("/report.json")
-      .then((response) => response.json())
-      .then((data: ReportData) => {
-        if (mounted) {
-          setReport(data);
-          setSelectedModel(data.models.rf.status === "trained" ? "rf" : "baseline");
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setReport(null);
-        }
-      });
+    const pad = "PAD_sintetico_3P";
+    const pozo = "Pozo1";
 
+    const load = async () => {
+      try {
+        setApiLoading(true);
+        setApiError(null);
+
+        const [extrap, firmas, t0, bocaPozo1, bocaPozo2, bocaPozo3, fondo] = await Promise.all([
+          fetchJson<ExtrapolacionEvento[]>(apiUrl("/get/extrapolacion_eventos", { pad })),
+          fetchJson<AnalisisFirma[]>(apiUrl("/get/analisis_firmas")),
+          fetchJson<PresionT0Pad[]>(apiUrl("/get/presion_t0_pad", { pad })),
+          fetchJson<PresionBoca[]>(apiUrl("/get/presion_boca", { pad, pozo: "Pozo1" })),
+          fetchJson<PresionBoca[]>(apiUrl("/get/presion_boca", { pad, pozo: "Pozo2" })),
+          fetchJson<PresionBoca[]>(apiUrl("/get/presion_boca", { pad, pozo: "Pozo3" })),
+          fetchJson<PresionFondo[]>(apiUrl("/get/presion_fondo", { pad })),
+        ]);
+
+        if (mounted) {
+          setExtrapolacion(extrap);
+          setAnalisisFirmas(firmas);
+          setPresionT0(t0);
+          setPresionBoca([...bocaPozo1, ...bocaPozo2, ...bocaPozo3]);
+          setPresionFondo(fondo);
+        }
+      } catch (error) {
+        if (mounted) {
+          const message = error instanceof Error ? error.message : "Error al cargar datos";
+          setApiError(message);
+        }
+      } finally {
+        if (mounted) {
+          setApiLoading(false);
+        }
+      }
+    };
+
+    load();
     return () => {
       mounted = false;
     };
   }, []);
 
-  const selected = useMemo(() => {
-    if (!report) return null;
-    return report.models[selectedModel];
-  }, [report, selectedModel]);
+  const extrapGroups = useMemo<ExtrapolationGroup[]>(() => {
+    const grouped = new Map<string, ExtrapolacionEvento[]>();
+    extrapolacion.forEach((item) => {
+      const key = buildEventKey(item);
+      const list = grouped.get(key) ?? [];
+      list.push(item);
+      grouped.set(key, list);
+    });
 
-  if (!report) {
-    return <LoadingState />;
-  }
+    return Array.from(grouped.entries())
+      .map(([key, rows]) => {
+        const best = selectBestWindow(rows);
+        const score = mean([best.R2_exp, best.R2_semilog].filter(isFiniteNumber));
+        return {
+          key,
+          rows,
+          best,
+          score,
+          label: formatEventLabel(best),
+        };
+      })
+      .sort((a, b) => {
+        const timeDiff = a.best.timestamp_evento.localeCompare(b.best.timestamp_evento);
+        if (timeDiff !== 0) return timeDiff;
+        if (a.best.pozo_id !== b.best.pozo_id) return a.best.pozo_id.localeCompare(b.best.pozo_id);
+        if (a.best.tipo_evento !== b.best.tipo_evento) return a.best.tipo_evento.localeCompare(b.best.tipo_evento);
+        return b.score - a.score;
+      });
+  }, [extrapolacion]);
 
-  const activeModel = selected && selected.status === "trained" ? selected : report.models.baseline;
-  const preview = activeModel.prediction_preview;
-  const labels = preview.map((row) => formatDate(row.date));
-  const firstActual = preview.map((row) => row.actual_gor);
-  const firstPredicted = selectedModel === "baseline" ? preview.map((row) => row.baseline_pred) : preview.map((row) => row.rf_pred);
-  const productionLabels = report.production_series.map((row) => formatDateTime(row.date));
-  const gasSeries = report.production_series.map((row) => row.gas_m3_hora);
-  const liquidSeries = report.production_series.map((row) => row.liquid_m3_hora);
-  const ratioSeries = report.production_series.map((row) => row.gas_to_liquid_ratio);
-  const featureBars = activeModel.importance.slice(0, 12).map((item) => ({
-    label: item.feature,
-    value: item.importance,
-  }));
-  const topFeatures = [...activeModel.importance].slice(0, 5);
-  const testGap = activeModel.metrics.RMSE - activeModel.cv_rmse;
-  const coverageLabel = `${formatNumber(report.dataset.gor_coverage * 100, 1)}%`;
+  const extrapGroupsByPozo = useMemo(() => {
+    const grouped = new Map<string, ExtrapolationGroup[]>();
+    extrapGroups.forEach((group) => {
+      const list = grouped.get(group.best.pozo_id) ?? [];
+      list.push(group);
+      grouped.set(group.best.pozo_id, list);
+    });
+
+    const preferredOrder = ["Pozo1", "Pozo2", "Pozo3"];
+    const orderedPozos = [
+      ...preferredOrder.filter((pozo) => grouped.has(pozo)),
+      ...Array.from(grouped.keys()).filter((pozo) => !preferredOrder.includes(pozo)).sort((a, b) => a.localeCompare(b)),
+    ];
+
+    return orderedPozos.map((pozo) => ({
+      pozo,
+      groups: (grouped.get(pozo) ?? []).slice().sort((a, b) => {
+        const timeDiff = a.best.timestamp_evento.localeCompare(b.best.timestamp_evento);
+        if (timeDiff !== 0) return timeDiff;
+        return b.score - a.score;
+      }),
+    }));
+  }, [extrapGroups]);
+
+  useEffect(() => {
+    if (extrapGroups.length > 0 && (!selectedExtrapolationKey || !extrapGroups.some((group) => group.key === selectedExtrapolationKey))) {
+      setSelectedExtrapolationKey(extrapGroups[0].key);
+    }
+  }, [extrapGroups, selectedExtrapolationKey]);
+
+  const firmasSorted = useMemo(() => [...analisisFirmas].sort((a, b) => a.t_inicio.localeCompare(b.t_inicio)), [analisisFirmas]);
+  const bocaByPozo = useMemo(() => {
+    const grouped = new Map<string, PresionBoca[]>();
+    presionBoca.forEach((item) => {
+      const list = grouped.get(item.pozo_id) ?? [];
+      list.push(item);
+      grouped.set(item.pozo_id, list);
+    });
+
+    return Array.from(grouped.entries()).map(([pozo, items]) => ({
+      pozo,
+      items: [...items].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+    }));
+  }, [presionBoca]);
+  const bocaSorted = useMemo(() => bocaByPozo.find((item) => item.pozo === "Pozo1")?.items ?? [], [bocaByPozo]);
+  const fondoByPozo = useMemo(() => {
+    const grouped = new Map<string, PresionFondo[]>();
+    presionFondo.forEach((item) => {
+      const list = grouped.get(item.pozo_id) ?? [];
+      list.push(item);
+      grouped.set(item.pozo_id, list);
+    });
+    return Array.from(grouped.entries()).map(([pozo, items]) => ({
+      pozo,
+      items: items.sort((a, b) => a.fecha_medicion.localeCompare(b.fecha_medicion)),
+    }));
+  }, [presionFondo]);
+  const selectedExtrapolation = useMemo(
+    () => extrapGroups.find((group) => group.key === selectedExtrapolationKey) ?? extrapGroups[0] ?? null,
+    [extrapGroups, selectedExtrapolationKey],
+  );
+  const selectedExtrapolationSeries = useMemo(() => {
+    if (!selectedExtrapolation) return [];
+    return buildPressureSeriesForEvent(selectedExtrapolation.best, bocaByPozo);
+  }, [bocaByPozo, selectedExtrapolation]);
+
 
   return (
     <main className="page">
@@ -1055,294 +1722,107 @@ function App() {
           </section>
         ) : (
           <>
-            <header className="hero">
-              <div className="hero__copy">
-                <div className="hero__brand">
-                  <img src={tecpetrolLogo} alt="Tecpetrol" className="hero__logo" />
-                </div>
-                <div className="hero__eyebrow">
-                  <span className="hero__dot" />
-                  React dashboard para modelado de presión
-                </div>
-                <h1>{report.project.title}</h1>
-                <p className="hero__lead">{report.project.subtitle}</p>
-                <p className="hero__body">
-                  La interfaz ya consume un snapshot real del pipeline: dataset limpio, features de presión por pozo y una comparación inicial entre
-                  baseline y Random Forest. XGBoost quedó reservado para cuando la dependencia esté disponible.
-                </p>
+            <Panel title="Datos reales (API)" subtitle="Visualizaciones generadas desde los endpoints en vivo.">
+              {apiLoading ? <div className="loading-card">Cargando datos API...</div> : null}
+              {apiError ? <div className="upload__status upload__status--error">{apiError}</div> : null}
+            </Panel>
 
-                <div className="hero__chips">
-                  <Chip tone="accent">{report.dataset.well_count} pozos</Chip>
-                  <Chip tone="success">{coverageLabel} con GOR</Chip>
-                  <Chip tone="neutral">{report.dataset.feature_count} features</Chip>
-                  <Chip tone="neutral">GOR continuo</Chip>
-                </div>
-              </div>
+            {!apiLoading && !apiError ? (
+              <>
+                <Panel title="Presion de boca (Pozo1)" subtitle="Serie temporal con presion de boca, anular y linea hidrostatica.">
+                  <LineChart
+                    labels={bocaSorted.map((row) => formatDateTime(row.timestamp))}
+                    series={[
+                      { name: "Boca (psi)", color: colors.accent, values: fillMissing(bocaSorted.map((row) => row.presion_boca_psi)) },
+                      { name: "Anular (psi)", color: colors.blue, values: fillMissing(bocaSorted.map((row) => row.presion_anular_psi)) },
+                      { name: "Hidro (psi)", color: colors.accent2, values: fillMissing(bocaSorted.map((row) => row.P_hidro_boca_psi)) },
+                    ]}
+                    ariaLabel="Presion de boca Pozo1"
+                  />
+                </Panel>
 
-              <div className="hero__stats">
-                <MetricCard label="Registros" value={formatNumber(report.dataset.rows)} hint="Filas totales del Excel limpio" tone="default" />
-                <MetricCard label="Entrenables" value={formatNumber(report.dataset.trainable_rows)} hint="Filas con GOR disponible" tone="accent" />
-                <MetricCard label="GOR promedio" value={formatNumber(report.dataset.gor_mean, 1)} hint="m³ gas / m³ líquido" tone="success" />
-                <MetricCard label="WOR promedio" value={formatNumber(report.dataset.wor_mean, 4)} hint="Casi constante, se descarta" tone="default" />
-              </div>
-            </header>
+                <Panel title="Presion T0 por pozo" subtitle="Comparacion de P_t0 medido en cada pozo.">
+                  <HorizontalBarChart
+                    items={presionT0
+                      .filter((item) => item.pozo_id !== "PAD_resumen")
+                      .map((item) => ({
+                        label: item.pozo_id,
+                        value: item.P_t0_medido,
+                      }))}
+                    ariaLabel="Presion T0 por pozo"
+                  />
+                </Panel>
 
-        <section className="metric-strip">
-          <MetricCard label="GOR mediana" value={formatNumber(report.dataset.gor_median, 1)} hint="Punto central de la distribución" />
-          <MetricCard label="GOR desvío" value={formatNumber(report.dataset.gor_std, 1)} hint="Mide dispersión real del target" />
-          <MetricCard label="WOR desvío" value={formatNumber(report.dataset.wor_std, 4)} hint="Confirmación de baja señal" />
-          <MetricCard label="Ventana temporal" value={`${formatDate(report.dataset.date_min)} → ${formatDate(report.dataset.date_max)}`} hint="Cobertura del dataset" />
-        </section>
+                <Panel title="Analisis de firmas" subtitle="Tendencia de presion media y desvio por segmento.">
+                  <LineChart
+                    labels={firmasSorted.map((row) => formatDateTime(row.t_inicio))}
+                    series={[
+                      { name: "P media", color: colors.accent, values: firmasSorted.map((row) => row.p_media) },
+                      { name: "P std", color: colors.blue, values: firmasSorted.map((row) => row.p_std) },
+                    ]}
+                    ariaLabel="Analisis de firmas"
+                  />
+                </Panel>
 
-        <Panel
-          title="Estadísticas del GOR"
-          subtitle="Las métricas exploratorias del backend quedan visibles acá para leer la distribución antes del modelado."
-        >
-          <div className="metric-strip metric-strip--dense">
-            <MetricCard label="Muestras GOR" value={formatNumber(report.gor_stats.count)} hint="Filas con target disponible" />
-            <MetricCard label="Media" value={formatNumber(report.gor_stats.mean, 2)} hint="Valor promedio del GOR" />
-            <MetricCard label="Desvío" value={formatNumber(report.gor_stats.std, 2)} hint="Dispersión del target" />
-            <MetricCard label="Mín / Máx" value={`${formatNumber(report.gor_stats.min, 2)} / ${formatNumber(report.gor_stats.max, 2)}`} hint="Rango completo observado" />
-          </div>
+                <Panel title="Tablas de extrapolacion" subtitle="Una tabla por pozo. La ventana con mejor R2 promedio queda marcada en la primera carga.">
+                  {extrapGroupsByPozo.length > 0 ? (
+                    <div className="extrap-tables">
+                      {extrapGroupsByPozo.map((groupByPozo) => (
+                        <section key={groupByPozo.pozo} className="extrap-table-panel">
+                          <div className="panel__subhead panel__subhead--compact">
+                            <div>
+                              <h3>{groupByPozo.pozo}</h3>
+                              <p>{groupByPozo.groups.length} eventos extrapolados</p>
+                            </div>
+                          </div>
+                          <ExtrapolationTable
+                            groups={groupByPozo.groups}
+                            selectedKey={selectedExtrapolationKey}
+                            onSelect={setSelectedExtrapolationKey}
+                          />
+                        </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="loading-card">Sin datos de extrapolacion.</div>
+                  )}
+                </Panel>
 
-          <div className="metric-strip metric-strip--dense metric-strip--3">
-            <MetricCard label="P25 / Mediana / P75" value={`${formatNumber(report.gor_stats.p25, 2)} / ${formatNumber(report.gor_stats.p50, 2)} / ${formatNumber(report.gor_stats.p75, 2)}`} hint="Cuartiles de la distribución" />
-            <MetricCard label="IQR" value={formatNumber(report.gor_stats.iqr, 2)} hint="Rango intercuartílico" />
-            <MetricCard label="Outliers" value={`${report.gor_stats.n_outliers} (${report.gor_stats.pct_outliers})`} hint="Método IQR de Tukey" />
-            <MetricCard label="Fences" value={`${formatNumber(report.gor_stats.lower_fence, 2)} / ${formatNumber(report.gor_stats.upper_fence, 2)}`} hint="Límites inferior y superior" />
-            <MetricCard label="Gas dominante" value={formatNumber(report.gor_stats.n_gas_dominante)} hint={`GOR >= ${report.regime_thresholds.gas}`} />
-            <MetricCard label="Mixto" value={formatNumber(report.gor_stats.n_mixto)} hint={`Entre ${report.regime_thresholds.liquid} y ${report.regime_thresholds.gas}`} />
-            <MetricCard label="Líquido dominante" value={formatNumber(report.gor_stats.n_liquido_dominante)} hint={`GOR < ${report.regime_thresholds.liquid}`} />
-          </div>
-        </Panel>
+                {selectedExtrapolation ? (
+                  <Panel
+                    title={`Curvas seleccionadas (${selectedExtrapolation.label})`}
+                    subtitle="Curvas reconstruidas con los datos reales del endpoint y la serie temporal del pozo."
+                  >
+                    <ExtrapolationEventCard event={selectedExtrapolation} pressureSeries={selectedExtrapolationSeries} />
+                  </Panel>
+                ) : null}
 
-        <Panel
-          title="Resultados de modelado"
-          subtitle="La comparación queda lista para leer XGBoost cuando esté disponible y ya muestra el comportamiento real de Baseline y Random Forest."
-        >
-          <div className="model-grid">
-            <ModelCard
-              model={report.models.baseline}
-              active={selectedModel === "baseline"}
-              onClick={() => setSelectedModel("baseline")}
-            />
-            <ModelCard model={report.models.rf} active={selectedModel === "rf"} onClick={() => setSelectedModel("rf")} />
-            <ModelCard
-              model={report.models.xgb}
-              active={selectedModel === "xgb"}
-              disabled
-              onClick={() => setSelectedModel("xgb")}
-            />
-          </div>
+                <Panel title="Curvas por evento" subtitle="Una tarjeta por evento con su ajuste exp, semilog y Horner cuando aplica.">
+                  <div className="extrap-grid">
+                    {extrapGroups.map((group) => (
+                      <ExtrapolationEventCard
+                        key={group.key}
+                        event={group}
+                        pressureSeries={buildPressureSeriesForEvent(group.best, bocaByPozo)}
+                      />
+                    ))}
+                  </div>
+                </Panel>
 
-          <div className="result-grid">
-            <div className="result-grid__chart">
-              <div className="panel__subhead">
-                <div>
-                  <h3>Predicción vs real</h3>
-                  <p>
-                    Tramo de test para {activeModel.label}. El modelo elegido se compara contra la curva real de GOR y los umbrales físicos
-                    propuestos para régimen líquido y gas.
-                  </p>
-                </div>
-                <div className="panel__chips">
-                  <Chip tone="neutral">CV RMSE {formatNumber(activeModel.cv_rmse, 2)}</Chip>
-                  <Chip tone={testGap > 0 ? "danger" : "success"}>Gap test-CV {formatNumber(testGap, 2)}</Chip>
-                </div>
-              </div>
-
-              <LineChart
-                labels={labels}
-                series={[
-                  { name: "GOR real", color: colors.blue, values: firstActual },
-                  {
-                    name: activeModel.label,
-                    color: colors.accent2,
-                    values: firstPredicted,
-                  },
-                ]}
-                ariaLabel="Comparación entre GOR real y predicción del modelo"
-                thresholds={[
-                  { label: "Líquido", value: report.regime_thresholds.liquid, color: colors.accent },
-                  { label: "Gas", value: report.regime_thresholds.gas, color: colors.danger },
-                ]}
-              />
-            </div>
-
-            <aside className="result-grid__side">
-              <div className="info-card">
-                <span className="info-card__eyebrow">Lectura rápida</span>
-                <h3>Señal útil</h3>
-                <p>
-                  La web está pensada para que el operador vea si la presión superficial se parece más a un régimen líquido estable o a uno
-                  con oscilaciones y spikes.
-                </p>
-              </div>
-
-              <div className="info-card info-card--tight">
-                <span className="info-card__eyebrow">Top features</span>
-                <h3>Variables que más pesan</h3>
-                <ul className="bullet-list">
-                  {topFeatures.map((item) => (
-                    <li key={item.feature}>
-                      <strong>{item.feature}</strong>
-                      <span>{formatNumber(item.importance, 3)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="info-card info-card--tight">
-                <span className="info-card__eyebrow">Nota</span>
-                <h3>XGBoost</h3>
-                <p>{report.models.xgb.note}</p>
-              </div>
-            </aside>
-          </div>
-        </Panel>
-
-        <Panel
-          title="Evolución del GOR en el tiempo"
-          subtitle="El gráfico superior muestra el GOR y los umbrales operativos; el inferior compara caudal de gas y líquido total."
-        >
-          <div className="panel__subhead">
-            <div>
-              <h3>GOR + caudales</h3>
-              <p>
-                El GOR medio es {formatNumber(report.dataset.gor_mean, 1)} m³/m³ y el máximo observado llega a {formatNumber(report.gor_stats.max, 1)} m³/m³.
-              </p>
-            </div>
-            <div className="panel__chips">
-              <Chip tone="neutral">Umbral líquido {report.regime_thresholds.liquid}</Chip>
-              <Chip tone="danger">Umbral gas {report.regime_thresholds.gas}</Chip>
-              <Chip tone="accent">Outliers {report.gor_stats.pct_outliers}</Chip>
-            </div>
-          </div>
-
-          <LineChart
-            labels={report.gor_series.map((row) => formatDateTime(row.date))}
-            series={[
-              { name: "GOR (m³/m³)", color: colors.accent, values: report.gor_series.map((row) => row.gor_m3_m3) },
-            ]}
-            thresholds={[
-              { label: "Límite gas", value: report.regime_thresholds.gas, color: colors.danger },
-              { label: "Límite líquido", value: report.regime_thresholds.liquid, color: colors.blue },
-            ]}
-            ariaLabel="Evolución temporal del GOR"
-          />
-
-          <div className="production-caption">
-            <span>Distribución del GOR: mediana {formatNumber(report.dataset.gor_median, 1)} y desvío {formatNumber(report.dataset.gor_std, 1)}</span>
-            <span>El crecimiento del GOR coincide con un régimen cada vez más gaseoso.</span>
-          </div>
-
-          <div className="panel__subhead panel__subhead--compact">
-            <div>
-              <h3>Caudal de gas y líquido total</h3>
-              <p>
-                {formatNumber(report.production_summary.gas_mean, 2)} m³/h de gas promedio frente a {formatNumber(report.production_summary.liquid_mean, 2)} m³/h de líquido promedio.
-              </p>
-            </div>
-            <div className="panel__chips">
-              <Chip tone="neutral">Ratio medio {formatNumber(report.production_summary.ratio_mean, 4)}</Chip>
-              <Chip tone="accent">Ratio máximo {formatNumber(report.production_summary.ratio_max, 4)}</Chip>
-            </div>
-          </div>
-
-          <LineChart
-            labels={productionLabels}
-            series={[
-              { name: "Gas (m³/h)", color: colors.accent, values: gasSeries },
-              { name: "Líquido total (m³/h)", color: colors.blue, values: liquidSeries },
-            ]}
-            ariaLabel="Evolución temporal del gas respecto del líquido total"
-          />
-
-          <div className="production-caption">
-            <span>Relación gas/líquido en la ventana: {formatNumber(percentile(ratioSeries, 0.5), 4)} mediana</span>
-            <span>Si la relación sube, el sistema se vuelve más gaseoso.</span>
-          </div>
-        </Panel>
-
-        <section className="two-col">
-          <Panel title="Histograma del GOR" subtitle="Distribución completa del target y separación entre zonas líquido, mixto y gas dominante.">
-            <HistogramChart
-              bins={report.gor_histogram}
-              thresholds={[
-                { label: "Líquido", value: report.regime_thresholds.liquid, color: colors.blue },
-                { label: "Gas", value: report.regime_thresholds.gas, color: colors.danger },
-              ]}
-              ariaLabel="Histograma del GOR"
-            />
-          </Panel>
-
-          <Panel title="Correlación features vs GOR" subtitle="Ranking de variables que mejor explican el target continuo antes del entrenamiento.">
-            <HorizontalBarChart
-              items={report.correlations_top.map((item) => ({
-                label: item.feature,
-                value: item.pearson_r,
-              }))}
-              ariaLabel="Correlación de Pearson entre features y GOR"
-            />
-          </Panel>
-        </section>
-
-        <section className="two-col">
-          <Panel title="Importancia de variables" subtitle="Ranking de features para el modelo seleccionado, ordenadas por peso absoluto.">
-            <BarList items={featureBars} />
-          </Panel>
-
-          <Panel title="Claves del proyecto" subtitle="Resumen de lo que hace interesante este problema físico y de modelado.">
-            <div className="narrative">
-              {report.narrative.map((line) => (
-                <div key={line} className="narrative__item">
-                  <span className="narrative__mark" />
-                  <p>{line}</p>
-                </div>
-              ))}
-            </div>
-          </Panel>
-        </section>
-
-        <section className="two-col">
-          <Panel title="Ventana del dataset" subtitle="Información temporal y de cobertura para contextualizar la corrida.">
-            <div className="timeline-card">
-              <div className="timeline-card__row">
-                <span>Inicio</span>
-                <strong>{formatDate(report.dataset.date_min)}</strong>
-              </div>
-              <div className="timeline-card__row">
-                <span>Fin</span>
-                <strong>{formatDate(report.dataset.date_max)}</strong>
-              </div>
-              <div className="timeline-card__row">
-                <span>GOR válido</span>
-                <strong>{coverageLabel}</strong>
-              </div>
-              <div className="timeline-card__row">
-                <span>Pozo / PAD</span>
-                <strong>{report.dataset.well_count}</strong>
-              </div>
-            </div>
-          </Panel>
-
-          <Panel title="Umbrales operativos" subtitle="La capa visual separa el GOR continuo en tres regiones solo para lectura.">
-            <div className="threshold-grid">
-              <div className="threshold-grid__item">
-                <span>Líquido dominante</span>
-                <strong>&lt; {report.regime_thresholds.liquid}</strong>
-              </div>
-              <div className="threshold-grid__item">
-                <span>Mixto</span>
-                <strong>{report.regime_thresholds.liquid} - {report.regime_thresholds.gas}</strong>
-              </div>
-              <div className="threshold-grid__item">
-                <span>Gas dominante</span>
-                <strong>&gt;= {report.regime_thresholds.gas}</strong>
-              </div>
-            </div>
-          </Panel>
-        </section>
+                {fondoByPozo.map((group) => (
+                  <Panel key={group.pozo} title={`Presion de fondo (${group.pozo})`} subtitle="Serie temporal por pozo.">
+                    <LineChart
+                      labels={group.items.map((row) => formatDate(row.fecha_medicion))}
+                      series={[
+                        { name: "P fondo (psia)", color: colors.accent, values: group.items.map((row) => row.presion_psia) },
+                        { name: "Hidro fondo", color: colors.accent2, values: fillMissing(group.items.map((row) => row.P_hidro_fondo_psia)) },
+                      ]}
+                      ariaLabel={`Presion fondo ${group.pozo}`}
+                    />
+                  </Panel>
+                ))}
+              </>
+            ) : null}
           </>
         )}
       </div>
