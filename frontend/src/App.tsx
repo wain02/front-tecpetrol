@@ -1070,6 +1070,41 @@ function ExtrapolationEventCard({
   );
 }
 
+function WellCarousel<T>({
+  items,
+  activeIndex,
+  onChange,
+  renderItem,
+  emptyLabel,
+}: {
+  items: T[];
+  activeIndex: number;
+  onChange: (index: number) => void;
+  renderItem: (item: T, index: number) => React.ReactNode;
+  emptyLabel: string;
+}) {
+  if (items.length === 0) {
+    return <div className="loading-card">{emptyLabel}</div>;
+  }
+
+  const safeIndex = ((activeIndex % items.length) + items.length) % items.length;
+  const prevIndex = (safeIndex - 1 + items.length) % items.length;
+  const nextIndex = (safeIndex + 1) % items.length;
+  const activeItem = items[safeIndex];
+
+  return (
+    <div className="well-carousel">
+      <button type="button" className="well-carousel__arrow well-carousel__arrow--left" onClick={() => onChange(prevIndex)} aria-label="Pozo anterior">
+        ‹
+      </button>
+      <div className="well-carousel__viewport">{renderItem(activeItem, safeIndex)}</div>
+      <button type="button" className="well-carousel__arrow well-carousel__arrow--right" onClick={() => onChange(nextIndex)} aria-label="Pozo siguiente">
+        ›
+      </button>
+    </div>
+  );
+}
+
 function ModelCard({
   model,
   active,
@@ -1158,6 +1193,9 @@ function App() {
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [selectedExtrapolationKey, setSelectedExtrapolationKey] = useState<string | null>(null);
+  const [activeExtrapolationPozoIndex, setActiveExtrapolationPozoIndex] = useState(0);
+  const [activeBocaIndex, setActiveBocaIndex] = useState(0);
+  const [activeFondoIndex, setActiveFondoIndex] = useState(0);
   const columnsListId = "csv-columns-list";
     const updateWellCount = (value: number) => {
       const safeValue = Math.min(3, Math.max(1, value));
@@ -1398,7 +1436,6 @@ function App() {
       items: [...items].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
     }));
   }, [presionBoca]);
-  const bocaSorted = useMemo(() => bocaByPozo.find((item) => item.pozo === "Pozo1")?.items ?? [], [bocaByPozo]);
   const fondoByPozo = useMemo(() => {
     const grouped = new Map<string, PresionFondo[]>();
     presionFondo.forEach((item) => {
@@ -1419,6 +1456,30 @@ function App() {
     if (!selectedExtrapolation) return [];
     return buildPressureSeriesForEvent(selectedExtrapolation.best, bocaByPozo);
   }, [bocaByPozo, selectedExtrapolation]);
+
+  useEffect(() => {
+    if (bocaByPozo.length > 0) {
+      setActiveBocaIndex((current) => Math.min(current, bocaByPozo.length - 1));
+    } else {
+      setActiveBocaIndex(0);
+    }
+  }, [bocaByPozo.length]);
+
+  useEffect(() => {
+    if (fondoByPozo.length > 0) {
+      setActiveFondoIndex((current) => Math.min(current, fondoByPozo.length - 1));
+    } else {
+      setActiveFondoIndex(0);
+    }
+  }, [fondoByPozo.length]);
+
+  useEffect(() => {
+    if (extrapGroupsByPozo.length > 0) {
+      setActiveExtrapolationPozoIndex((current) => Math.min(current, extrapGroupsByPozo.length - 1));
+    } else {
+      setActiveExtrapolationPozoIndex(0);
+    }
+  }, [extrapGroupsByPozo.length]);
 
 
   return (
@@ -1729,15 +1790,34 @@ function App() {
 
             {!apiLoading && !apiError ? (
               <>
-                <Panel title="Presion de boca (Pozo1)" subtitle="Serie temporal con presion de boca, anular y linea hidrostatica.">
-                  <LineChart
-                    labels={bocaSorted.map((row) => formatDateTime(row.timestamp))}
-                    series={[
-                      { name: "Boca (psi)", color: colors.accent, values: fillMissing(bocaSorted.map((row) => row.presion_boca_psi)) },
-                      { name: "Anular (psi)", color: colors.blue, values: fillMissing(bocaSorted.map((row) => row.presion_anular_psi)) },
-                      { name: "Hidro (psi)", color: colors.accent2, values: fillMissing(bocaSorted.map((row) => row.P_hidro_boca_psi)) },
-                    ]}
-                    ariaLabel="Presion de boca Pozo1"
+                <Panel title="Presion de boca" subtitle="Usa las flechas para cambiar de pozo sin llenar la pagina de paneles.">
+                  <WellCarousel
+                    items={bocaByPozo}
+                    activeIndex={activeBocaIndex}
+                    onChange={setActiveBocaIndex}
+                    emptyLabel="Sin datos de presion de boca."
+                    renderItem={(group) => (
+                      <div className="well-carousel__card">
+                        <div className="well-carousel__head">
+                          <div>
+                            <h3>{group.pozo}</h3>
+                            <p>{group.items.length} registros</p>
+                          </div>
+                          <Chip tone="neutral">
+                            {group.pozo}
+                          </Chip>
+                        </div>
+                        <LineChart
+                          labels={group.items.map((row) => formatDateTime(row.timestamp))}
+                          series={[
+                            { name: "Boca (psi)", color: colors.accent, values: fillMissing(group.items.map((row) => row.presion_boca_psi)) },
+                            { name: "Anular (psi)", color: colors.blue, values: fillMissing(group.items.map((row) => row.presion_anular_psi)) },
+                            { name: "Hidro (psi)", color: colors.accent2, values: fillMissing(group.items.map((row) => row.P_hidro_boca_psi)) },
+                          ]}
+                          ariaLabel={`Presion de boca ${group.pozo}`}
+                        />
+                      </div>
+                    )}
                   />
                 </Panel>
 
@@ -1764,28 +1844,29 @@ function App() {
                   />
                 </Panel>
 
-                <Panel title="Tablas de extrapolacion" subtitle="Una tabla por pozo. La ventana con mejor R2 promedio queda marcada en la primera carga.">
-                  {extrapGroupsByPozo.length > 0 ? (
-                    <div className="extrap-tables">
-                      {extrapGroupsByPozo.map((groupByPozo) => (
-                        <section key={groupByPozo.pozo} className="extrap-table-panel">
-                          <div className="panel__subhead panel__subhead--compact">
-                            <div>
-                              <h3>{groupByPozo.pozo}</h3>
-                              <p>{groupByPozo.groups.length} eventos extrapolados</p>
-                            </div>
+                <Panel title="Tablas de extrapolacion" subtitle="Usa las flechas para cambiar de pozo sin apilar tablas en toda la pantalla.">
+                  <WellCarousel
+                    items={extrapGroupsByPozo}
+                    activeIndex={activeExtrapolationPozoIndex}
+                    onChange={setActiveExtrapolationPozoIndex}
+                    emptyLabel="Sin datos de extrapolacion."
+                    renderItem={(groupByPozo) => (
+                      <section className="extrap-table-panel">
+                        <div className="panel__subhead panel__subhead--compact">
+                          <div>
+                            <h3>{groupByPozo.pozo}</h3>
+                            <p>{groupByPozo.groups.length} eventos extrapolados</p>
                           </div>
-                          <ExtrapolationTable
-                            groups={groupByPozo.groups}
-                            selectedKey={selectedExtrapolationKey}
-                            onSelect={setSelectedExtrapolationKey}
-                          />
-                        </section>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="loading-card">Sin datos de extrapolacion.</div>
-                  )}
+                          <Chip tone="neutral">{groupByPozo.pozo}</Chip>
+                        </div>
+                        <ExtrapolationTable
+                          groups={groupByPozo.groups}
+                          selectedKey={selectedExtrapolationKey}
+                          onSelect={setSelectedExtrapolationKey}
+                        />
+                      </section>
+                    )}
+                  />
                 </Panel>
 
                 {selectedExtrapolation ? (
@@ -1809,18 +1890,33 @@ function App() {
                   </div>
                 </Panel>
 
-                {fondoByPozo.map((group) => (
-                  <Panel key={group.pozo} title={`Presion de fondo (${group.pozo})`} subtitle="Serie temporal por pozo.">
-                    <LineChart
-                      labels={group.items.map((row) => formatDate(row.fecha_medicion))}
-                      series={[
-                        { name: "P fondo (psia)", color: colors.accent, values: group.items.map((row) => row.presion_psia) },
-                        { name: "Hidro fondo", color: colors.accent2, values: fillMissing(group.items.map((row) => row.P_hidro_fondo_psia)) },
-                      ]}
-                      ariaLabel={`Presion fondo ${group.pozo}`}
-                    />
-                  </Panel>
-                ))}
+                <Panel title="Presion de fondo" subtitle="Carrusel por pozo para comparar sin apilar paneles infinitos.">
+                  <WellCarousel
+                    items={fondoByPozo}
+                    activeIndex={activeFondoIndex}
+                    onChange={setActiveFondoIndex}
+                    emptyLabel="Sin datos de presion de fondo."
+                    renderItem={(group) => (
+                      <div className="well-carousel__card">
+                        <div className="well-carousel__head">
+                          <div>
+                            <h3>{group.pozo}</h3>
+                            <p>{group.items.length} registros</p>
+                          </div>
+                          <Chip tone="neutral">{group.pozo}</Chip>
+                        </div>
+                        <LineChart
+                          labels={group.items.map((row) => formatDate(row.fecha_medicion))}
+                          series={[
+                            { name: "P fondo (psia)", color: colors.accent, values: group.items.map((row) => row.presion_psia) },
+                            { name: "Hidro fondo", color: colors.accent2, values: fillMissing(group.items.map((row) => row.P_hidro_fondo_psia)) },
+                          ]}
+                          ariaLabel={`Presion fondo ${group.pozo}`}
+                        />
+                      </div>
+                    )}
+                  />
+                </Panel>
               </>
             ) : null}
           </>

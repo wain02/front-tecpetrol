@@ -916,6 +916,74 @@ button {
   gap: 12px;
 }
 
+.well-carousel {
+  position: relative;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.well-carousel__viewport {
+  min-width: 0;
+}
+
+.well-carousel__card {
+  display: grid;
+  gap: 14px;
+}
+
+.well-carousel__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.well-carousel__head h3 {
+  margin: 0;
+  letter-spacing: -0.03em;
+}
+
+.well-carousel__head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.well-carousel__arrow {
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(13, 34, 58, 0.94), rgba(18, 36, 58, 0.88));
+  color: #f3f7fb;
+  font-size: 2rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  box-shadow: 0 14px 30px rgba(6, 32, 62, 0.18);
+  transition:
+    transform 160ms ease,
+    filter 160ms ease;
+}
+
+.well-carousel__arrow:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.well-carousel__arrow:active {
+  transform: translateY(0);
+}
+
+.well-carousel__arrow--left {
+  justify-self: start;
+}
+
+.well-carousel__arrow--right {
+  justify-self: end;
+}
+
 .extrap-table {
   width: 100%;
   min-width: 1080px;
@@ -1219,6 +1287,11 @@ button {
     gap: 16px;
   }
 
+  .well-carousel {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: 10px;
+  }
+
 }
 
 @media (max-width: 760px) {
@@ -1252,7 +1325,8 @@ button {
   .model-card__head,
   .threshold-grid__item,
   .timeline-card__row,
-  .extrap-card__head {
+  .extrap-card__head,
+  .well-carousel__head {
     flex-direction: column;
     align-items: flex-start;
   }
