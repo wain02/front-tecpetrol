@@ -1021,7 +1021,7 @@ button {
   z-index: 2;
   min-width: 160px;
   text-align: left;
-  background: rgba(12, 73, 120, 0.08);
+  background: #eef5fc; /* opaque — prevents bleed-through on horizontal scroll */
 }
 
 .extrap-table thead .extrap-table__stub {
@@ -1361,4 +1361,225 @@ button {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* ── Presión boca analysis view ──────────────────────────────────────── */
+
+.pba-view {
+  display: grid;
+  gap: 20px;
+  padding-top: 4px;
+}
+
+.pba-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-end;
+  padding: 18px 22px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(12, 73, 120, 0.12);
+  box-shadow: 0 8px 24px rgba(6, 32, 62, 0.06);
+}
+
+.pba-filter {
+  display: grid;
+  gap: 7px;
+  flex: 1 1 220px;
+}
+
+.pba-filter__label {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.88rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pba-filter__row {
+  display: flex;
+  gap: 8px;
+}
+
+.pba-input,
+.pba-select {
+  flex: 1;
+  border-radius: 14px;
+  border: 1px solid rgba(12, 73, 120, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px 14px;
+  color: var(--text);
+  min-width: 0;
+}
+
+.pba-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pba-btn {
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(15, 154, 76, 0.9), rgba(15, 154, 76, 0.7));
+  color: #fff;
+  font-weight: 700;
+  padding: 10px 20px;
+  white-space: nowrap;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.pba-btn:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.pba-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pba-chart-panel {
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(12, 73, 120, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 12px 40px rgba(6, 32, 62, 0.08);
+  overflow: hidden;
+}
+
+.pba-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid rgba(12, 73, 120, 0.08);
+}
+
+.pba-chart-header h3 {
+  margin: 0;
+  letter-spacing: -0.03em;
+}
+
+.pba-chart-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.pba-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pba-section-divider::before,
+.pba-section-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(12, 73, 120, 0.1);
+}
+
+.pba-fit-title {
+  padding: 14px 18px 4px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+/* ── EventFitChart spacing & new components ───────────────────────── */
+
+.pba-chart-section {
+  padding: 0 22px 28px;
+}
+
+.pba-chart-section--inner {
+  padding-top: 24px;
+  padding-bottom: 0;
+}
+
+.pba-fit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 6px;
+}
+
+.pba-fit-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.pba-download-btn {
+  border: 1px solid rgba(12, 73, 120, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease;
+  flex-shrink: 0;
+}
+
+.pba-download-btn:hover {
+  background: rgba(15, 154, 76, 0.1);
+  color: var(--text);
+  border-color: rgba(15, 154, 76, 0.3);
+}
+
+.pba-fit-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0;
+  border-top: 1px solid rgba(12, 73, 120, 0.08);
+}
+
+.pba-fit-footer .chart__legend {
+  border-top: none;
+  flex: 1 1 auto;
+}
+
+.pba-fit-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px 14px;
+  border-left: 1px solid rgba(12, 73, 120, 0.08);
+}
+
+.pba-fit-metric {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pba-fit-metric__star {
+  font-size: 1.3rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pba-fit-metric strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.pba-fit-metric span:last-child {
+  font-size: 0.82rem;
+  color: var(--muted);
 }

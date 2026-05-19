@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "./lib/supabase";
 import tecpetrolLogo from "../logos/logo-tecpe.png";
+import { PresionBocaAnalysis } from "./PresionBocaAnalysis";
 
 type PredictionRow = {
   date: string;
@@ -1176,7 +1177,7 @@ function LoadingState() {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "upload" | "docs">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "upload" | "docs" | "presion-boca">("dashboard");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [metadataFile, setMetadataFile] = useState<File | null>(null);
   const [uploadStep, setUploadStep] = useState<"select" | "form">("select");
@@ -1328,13 +1329,13 @@ function App() {
         setApiError(null);
 
         const [extrap, firmas, t0, bocaPozo1, bocaPozo2, bocaPozo3, fondo] = await Promise.all([
-          fetchJson<ExtrapolacionEvento[]>(apiUrl("/get/extrapolacion_eventos", { pad })),
-          fetchJson<AnalisisFirma[]>(apiUrl("/get/analisis_firmas")),
-          fetchJson<PresionT0Pad[]>(apiUrl("/get/presion_t0_pad", { pad })),
-          fetchJson<PresionBoca[]>(apiUrl("/get/presion_boca", { pad, pozo: "Pozo1" })),
-          fetchJson<PresionBoca[]>(apiUrl("/get/presion_boca", { pad, pozo: "Pozo2" })),
-          fetchJson<PresionBoca[]>(apiUrl("/get/presion_boca", { pad, pozo: "Pozo3" })),
-          fetchJson<PresionFondo[]>(apiUrl("/get/presion_fondo", { pad })),
+          fetchJson<ExtrapolacionEvento[]>(apiUrl("/pressure-extrapolation/extrapolacion_eventos", { pad })),
+          fetchJson<AnalisisFirma[]>(apiUrl("/pressure-extrapolation/analisis_firmas")),
+          fetchJson<PresionT0Pad[]>(apiUrl("/pressure-extrapolation/presion_t0_pad", { pad })),
+          fetchJson<PresionBoca[]>(apiUrl("/well-analysis/presion_boca", { pad, pozo: "Pozo1" })),
+          fetchJson<PresionBoca[]>(apiUrl("/well-analysis/presion_boca", { pad, pozo: "Pozo2" })),
+          fetchJson<PresionBoca[]>(apiUrl("/well-analysis/presion_boca", { pad, pozo: "Pozo3" })),
+          fetchJson<PresionFondo[]>(apiUrl("/well-analysis/presion_fondo", { pad })),
         ]);
 
         if (mounted) {
@@ -1513,10 +1514,19 @@ function App() {
             >
               Documentacion
             </button>
+            <button
+              type="button"
+              className={classNames("tab", activeTab === "presion-boca" && "tab--active")}
+              onClick={() => setActiveTab("presion-boca")}
+            >
+              Análisis presión
+            </button>
           </nav>
         </header>
 
-        {activeTab === "upload" ? (
+        {activeTab === "presion-boca" ? (
+          <PresionBocaAnalysis />
+        ) : activeTab === "upload" ? (
           <section className="upload">
             {uploadStep === "select" ? (
               <div className="upload__card">
