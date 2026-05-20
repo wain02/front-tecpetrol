@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "./lib/supabase";
 import tecpetrolLogo from "../logos/logo-tecpe.png";
-import { PresionBocaAnalysis } from "./PresionBocaAnalysis";
+import { PresionBocaAnalysis } from "./presion-boca";
 
 type PredictionRow = {
   date: string;
@@ -1329,13 +1329,13 @@ function App() {
         setApiError(null);
 
         const [extrap, firmas, t0, bocaPozo1, bocaPozo2, bocaPozo3, fondo] = await Promise.all([
-          fetchJson<ExtrapolacionEvento[]>(apiUrl("/pressure-extrapolation/extrapolacion_eventos", { pad })),
-          fetchJson<AnalisisFirma[]>(apiUrl("/pressure-extrapolation/analisis_firmas")),
-          fetchJson<PresionT0Pad[]>(apiUrl("/pressure-extrapolation/presion_t0_pad", { pad })),
-          fetchJson<PresionBoca[]>(apiUrl("/well-analysis/presion_boca", { pad, pozo: "Pozo1" })),
-          fetchJson<PresionBoca[]>(apiUrl("/well-analysis/presion_boca", { pad, pozo: "Pozo2" })),
-          fetchJson<PresionBoca[]>(apiUrl("/well-analysis/presion_boca", { pad, pozo: "Pozo3" })),
-          fetchJson<PresionFondo[]>(apiUrl("/well-analysis/presion_fondo", { pad })),
+          fetchJson<ExtrapolacionEvento[]>(apiUrl("/1pressure-extrapolation/extrapolacion_eventos", { pad })),
+          fetchJson<AnalisisFirma[]>(apiUrl("/1pressure-extrapolation/analisis_firmas")),
+          fetchJson<PresionT0Pad[]>(apiUrl("/1pressure-extrapolation/presion_t0_pad", { pad })),
+          fetchJson<PresionBoca[]>(apiUrl("/1well-analysis/presion_boca", { pad, pozo: "Pozo1" })),
+          fetchJson<PresionBoca[]>(apiUrl("/1well-analysis/presion_boca", { pad, pozo: "Pozo2" })),
+          fetchJson<PresionBoca[]>(apiUrl("/1well-analysis/presion_boca", { pad, pozo: "Pozo3" })),
+          fetchJson<PresionFondo[]>(apiUrl("/1well-analysis/presion_fondo", { pad })),
         ]);
 
         if (mounted) {
