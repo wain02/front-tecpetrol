@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import type { WellAnalysisRecord, ExtrapolationEvent } from "./types";
+import type { WellAnalysisRecord, ExtrapolationEvent, DensidadColumnaRecord } from "./types";
 import { buildApiUrl, fetchJson } from "./api";
 import { OverlayChart } from "./OverlayChart";
 import { WellDetailChart } from "./WellDetailChart";
 import { ExtrapolationTable } from "./ExtrapolationTable";
 import { EventFitChart } from "./EventFitChart";
+import { DensidadColumnaPanel } from "./DensidadColumnaPanel";
 
 export function PresionBocaAnalysis() {
   const [pads, setPads] = useState<string[]>([]);
@@ -17,6 +18,8 @@ export function PresionBocaAnalysis() {
   const [extrapolaciones, setExtrapolaciones] = useState<ExtrapolationEvent[]>([]);
   const [extrapLoading, setExtrapLoading] = useState(false);
   const [selectedEventTs, setSelectedEventTs] = useState<string | null>(null);
+  const [densidadData, setDensidadData] = useState<DensidadColumnaRecord[]>([]);
+  const [densidadLoading, setDensidadLoading] = useState(false);
 
   useEffect(() => {
     fetchJson<string[]>(buildApiUrl("/catalog/pads"))
@@ -39,6 +42,18 @@ export function PresionBocaAnalysis() {
       .then(setExtrapolaciones)
       .catch(() => setExtrapolaciones([]))
       .finally(() => setExtrapLoading(false));
+  }, [selectedPad, selectedPozo]);
+
+  useEffect(() => {
+    setDensidadData([]);
+    if (!selectedPad || !selectedPozo) return;
+    setDensidadLoading(true);
+    fetchJson<DensidadColumnaRecord[]>(
+      buildApiUrl("/pressure-analysis/densidad_columna", { pad: selectedPad, pozo: selectedPozo }),
+    )
+      .then(setDensidadData)
+      .catch(() => setDensidadData([]))
+      .finally(() => setDensidadLoading(false));
   }, [selectedPad, selectedPozo]);
 
   const pozos = useMemo(() => Array.from(new Set(allData.map((r) => r.pozo_id))).sort(), [allData]);
@@ -160,6 +175,19 @@ export function PresionBocaAnalysis() {
                       </div>
                     ) : null}
                   </>
+                )}
+              </div>
+              <div className="pba-section-divider">
+                <span>Densidad de columna</span>
+              </div>
+
+              <div className="pba-chart-section">
+                {densidadLoading ? (
+                  <div className="loading-card">Cargando datos de densidad…</div>
+                ) : densidadData.length > 0 ? (
+                  <DensidadColumnaPanel data={densidadData} />
+                ) : (
+                  <div className="loading-card">Sin datos de densidad para este pozo.</div>
                 )}
               </div>
             </>

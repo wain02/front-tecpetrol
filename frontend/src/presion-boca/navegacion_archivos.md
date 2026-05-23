@@ -8,4 +8,5 @@ frontend/src/presion-boca/
   ExtrapolationTable.tsx   ← tabla de métricas por evento
   EventFitChart.tsx        ← gráfico interactivo de ajuste (con exclusión de puntos)
   index.tsx                ← PresionBocaAnalysis, el componente raíz que orquesta todo
+  DensidadColumnaPanel.tsx ← Grafico de evolucion de la densidad
 ```

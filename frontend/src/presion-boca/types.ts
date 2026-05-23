@@ -37,3 +37,18 @@ export type ExtrapolationEvent = {
   delta_vs_primer_dato_exp: number | null;
   delta_vs_primer_dato_semilog: number | null;
 };
+
+export type DensidadColumnaRecord = {
+  pad_id: string;
+  pozo_id: string;
+  timestamp: string;
+  presion_boca_psi: number;
+  presion_fondo_psia: number;
+  fecha_medicion_fondo: string;
+  horas_al_dato_fondo: number;
+  profundidad_tvd_m: number;
+  delta_P_psi: number;
+  densidad_columna_kg_l: number | null;
+  interpretacion: string;
+  dato_fondo_lejano: boolean;
+};
