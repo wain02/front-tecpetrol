@@ -3,8 +3,9 @@ import tecpetrolLogo from "../logos/logo-tecpe.png";
 import { PresionBocaAnalysis } from "./presion-boca";
 import { CargaCsv } from "./carga-csv";
 import { Documentacion } from "./documentacion";
+import { AnalisisCurva } from "./analisis-curva";
 
-type Tab = "upload" | "docs" | "presion-boca";
+type Tab = "upload" | "docs" | "presion-boca" | "analisis-curva";
 
 function cx(...items: Array<string | false | undefined>): string {
   return items.filter(Boolean).join(" ");
@@ -44,6 +45,13 @@ function App() {
             >
               Análisis presión
             </button>
+            <button
+              type="button"
+              className={cx("tab", activeTab === "analisis-curva" && "tab--active")}
+              onClick={() => setActiveTab("analisis-curva")}
+            >
+              Análisis curva
+            </button>
           </nav>
         </header>
 
@@ -51,6 +59,8 @@ function App() {
           <CargaCsv />
         ) : activeTab === "docs" ? (
           <Documentacion />
+        ) : activeTab === "analisis-curva" ? (
+          <AnalisisCurva />
         ) : (
           <PresionBocaAnalysis />
         )}

@@ -1,11 +1,76 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { WellAnalysisRecord } from "./types";
 import { formatDT } from "./utils";
 
+function DateButton({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  min?: string;
+  max?: string;
+  onChange: (v: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const display = value ? value.split("-").reverse().join("/") : label;
+
+  return (
+    <div style={{ display: "inline-block" }}>
+      <button
+        onClick={() => inputRef.current?.showPicker()}
+        style={{
+          fontSize: 11,
+          padding: "4px 10px",
+          background: value ? "#1e3a5f" : "#0f2744",
+          color: value ? "#c8daf0" : "#6b8aaa",
+          border: `1px solid ${value ? "#2d5a8e" : "#1e3a5f"}`,
+          borderRadius: 4,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+          userSelect: "none",
+        }}
+      >
+        {display}
+      </button>
+      <input
+        ref={inputRef}
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
+      />
+    </div>
+  );
+}
+
 export function WellDetailChart({ data }: { data: WellAnalysisRecord[] }) {
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const dateRange = useMemo(() => {
+    if (data.length === 0) return { min: "", max: "" };
+    const ts = [...data].map((r) => r.timestamp).sort();
+    return { min: ts[0].slice(0, 10), max: ts[ts.length - 1].slice(0, 10) };
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    if (!dateFrom && !dateTo) return data;
+    return data.filter((r) => {
+      if (dateFrom && r.timestamp < dateFrom) return false;
+      if (dateTo && r.timestamp > dateTo + "T23:59:59") return false;
+      return true;
+    });
+  }, [data, dateFrom, dateTo]);
+
   const sorted = useMemo(
-    () => [...data].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
-    [data],
+    () => [...filtered].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+    [filtered],
   );
 
   const width = 980;
@@ -86,9 +151,84 @@ export function WellDetailChart({ data }: { data: WellAnalysisRecord[] }) {
 
   const markerY = height - pad.bottom - 18;
 
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [drag, setDrag] = useState<{ startX: number; currentX: number } | null>(null);
+
+  const toSvgX = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    const raw = ((e.clientX - rect.left) / rect.width) * width;
+    return Math.max(pad.left, Math.min(width - pad.right, raw));
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    const x = toSvgX(e);
+    setDrag({ startX: x, currentX: x });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!drag) return;
+    setDrag((prev) => prev && { ...prev, currentX: toSvgX(e) });
+  };
+
+  const handleMouseUp = () => {
+    if (!drag) return;
+    const x1 = Math.min(drag.startX, drag.currentX);
+    const x2 = Math.max(drag.startX, drag.currentX);
+    if (x2 - x1 > 8) {
+      const t1 = xMin + ((x1 - pad.left) / cw) * (xMax - xMin);
+      const t2 = xMin + ((x2 - pad.left) / cw) * (xMax - xMin);
+      setDateFrom(new Date(t1).toISOString().slice(0, 10));
+      setDateTo(new Date(t2).toISOString().slice(0, 10));
+    }
+    setDrag(null);
+  };
+
   return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
+        <DateButton
+          label="Fecha desde"
+          value={dateFrom}
+          min={dateRange.min}
+          max={dateTo || dateRange.max}
+          onChange={setDateFrom}
+        />
+        <DateButton
+          label="Fecha hasta"
+          value={dateTo}
+          min={dateFrom || dateRange.min}
+          max={dateRange.max}
+          onChange={setDateTo}
+        />
+        {(dateFrom || dateTo) && (
+          <button
+            onClick={() => { setDateFrom(""); setDateTo(""); }}
+            style={{
+              fontSize: 11,
+              padding: "4px 8px",
+              background: "transparent",
+              color: "#6b8aaa",
+              border: "1px solid #1e3a5f",
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            Limpiar
+          </button>
+        )}
+      </div>
     <div className="chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Presión boca — detalle pozo">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Presión boca — detalle pozo"
+        style={{ cursor: "crosshair", userSelect: "none" }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={() => setDrag(null)}
+      >
         {segments.map((seg, i) => (
           <rect
             key={i}
@@ -229,6 +369,19 @@ export function WellDetailChart({ data }: { data: WellAnalysisRecord[] }) {
             Orificio (mm)
           </text>
         ) : null}
+
+        {drag && (
+          <rect
+            x={Math.min(drag.startX, drag.currentX)}
+            y={pad.top}
+            width={Math.abs(drag.currentX - drag.startX)}
+            height={ch}
+            fill="rgba(200,218,240,0.12)"
+            stroke="rgba(200,218,240,0.55)"
+            strokeWidth="1"
+            pointerEvents="none"
+          />
+        )}
       </svg>
 
       <div className="chart__legend">
@@ -289,6 +442,7 @@ export function WellDetailChart({ data }: { data: WellAnalysisRecord[] }) {
           </>
         ) : null}
       </div>
+    </div>
     </div>
   );
 }

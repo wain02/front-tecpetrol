@@ -38,6 +38,39 @@ export type ExtrapolationEvent = {
   delta_vs_primer_dato_semilog: number | null;
 };
 
+export type PreAperturaEvent = {
+  pozo_id: string;
+  pad_id: string;
+  timestamp_evento: string;
+  tipo_evento: string;
+  N_puntos: number;
+  t_rel: number[];
+  p_obs: number[];
+  P_ultimo_dato: number;
+  a_lineal: number | null;
+  b_lineal: number | null;
+  P_estimada_lineal: number | null;
+  R2_lineal: number | null;
+  params_exp: { P_estable: number; A: number; k: number } | null;
+  P_estimada_exp: number | null;
+  R2_exp: number | null;
+  a_slog: number | null;
+  b_slog: number | null;
+  P_estimada_semilog: number | null;
+  R2_semilog: number | null;
+  delta_ultimo_vs_lineal: number | null;
+  delta_ultimo_vs_exp: number | null;
+  delta_ultimo_vs_semilog: number | null;
+};
+
+export type GorEvolutionRecord = {
+  pad_id: string;
+  timestamp: string;
+  gor_m3_m3: number | null;
+  gas_m3_hora: number;
+  liq_total_m3_hora: number;
+};
+
 export type DensidadColumnaRecord = {
   pad_id: string;
   pozo_id: string;

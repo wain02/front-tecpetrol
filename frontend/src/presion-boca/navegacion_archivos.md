@@ -9,4 +9,5 @@ frontend/src/presion-boca/
   EventFitChart.tsx        ← gráfico interactivo de ajuste (con exclusión de puntos)
   index.tsx                ← PresionBocaAnalysis, el componente raíz que orquesta todo
   DensidadColumnaPanel.tsx ← Grafico de evolucion de la densidad
+  GorEvolutionPanel.tsx    ← Grafico de evolucion de relacion liquido-gas de todo el PAD
 ```

@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import type { WellAnalysisRecord, ExtrapolationEvent, DensidadColumnaRecord } from "./types";
+import type { WellAnalysisRecord, ExtrapolationEvent, PreAperturaEvent, DensidadColumnaRecord, GorEvolutionRecord } from "./types";
 import { buildApiUrl, fetchJson } from "./api";
 import { OverlayChart } from "./OverlayChart";
 import { WellDetailChart } from "./WellDetailChart";
 import { ExtrapolationTable } from "./ExtrapolationTable";
 import { EventFitChart } from "./EventFitChart";
+import { PreAperturaTable } from "./PreAperturaTable";
+import { PreAperturaFitChart } from "./PreAperturaFitChart";
 import { DensidadColumnaPanel } from "./DensidadColumnaPanel";
+import { GorEvolutionPanel } from "./GorEvolutionPanel";
 
 export function PresionBocaAnalysis() {
   const [pads, setPads] = useState<string[]>([]);
@@ -18,8 +21,13 @@ export function PresionBocaAnalysis() {
   const [extrapolaciones, setExtrapolaciones] = useState<ExtrapolationEvent[]>([]);
   const [extrapLoading, setExtrapLoading] = useState(false);
   const [selectedEventTs, setSelectedEventTs] = useState<string | null>(null);
+  const [preAperturaEvents, setPreAperturaEvents] = useState<PreAperturaEvent[]>([]);
+  const [preAperturaLoading, setPreAperturaLoading] = useState(false);
+  const [selectedPreAperturaTs, setSelectedPreAperturaTs] = useState<string | null>(null);
   const [densidadData, setDensidadData] = useState<DensidadColumnaRecord[]>([]);
   const [densidadLoading, setDensidadLoading] = useState(false);
+  const [gorData, setGorData] = useState<GorEvolutionRecord[]>([]);
+  const [gorLoading, setGorLoading] = useState(false);
 
   useEffect(() => {
     fetchJson<string[]>(buildApiUrl("/catalog/pads"))
@@ -43,6 +51,32 @@ export function PresionBocaAnalysis() {
       .catch(() => setExtrapolaciones([]))
       .finally(() => setExtrapLoading(false));
   }, [selectedPad, selectedPozo]);
+
+  useEffect(() => {
+    setPreAperturaEvents([]);
+    setSelectedPreAperturaTs(null);
+    if (!selectedPad || !selectedPozo) return;
+    setPreAperturaLoading(true);
+    fetchJson<PreAperturaEvent[]>(
+      buildApiUrl("/pressure-extrapolation/extrapolacion_eventos/pre_apertura", {
+        pad: selectedPad,
+        pozo: selectedPozo,
+      }),
+    )
+      .then(setPreAperturaEvents)
+      .catch(() => setPreAperturaEvents([]))
+      .finally(() => setPreAperturaLoading(false));
+  }, [selectedPad, selectedPozo]);
+
+  useEffect(() => {
+    setGorData([]);
+    if (!selectedPad) return;
+    setGorLoading(true);
+    fetchJson<GorEvolutionRecord[]>(buildApiUrl("/well-analysis/gor-evolution", { pad: selectedPad }))
+      .then(setGorData)
+      .catch(() => setGorData([]))
+      .finally(() => setGorLoading(false));
+  }, [selectedPad]);
 
   useEffect(() => {
     setDensidadData([]);
@@ -85,6 +119,11 @@ export function PresionBocaAnalysis() {
   const selectedEvent = useMemo(
     () => extrapolaciones.find((e) => e.timestamp_evento === selectedEventTs) ?? null,
     [extrapolaciones, selectedEventTs],
+  );
+
+  const selectedPreAperturaEvent = useMemo(
+    () => preAperturaEvents.find((e) => e.timestamp_evento === selectedPreAperturaTs) ?? null,
+    [preAperturaEvents, selectedPreAperturaTs],
   );
 
   const hasData = !loading && selectedPad && allData.length > 0;
@@ -156,7 +195,7 @@ export function PresionBocaAnalysis() {
               </div>
 
               <div className="pba-section-divider">
-                <span>Extrapolación por apertura</span>
+                <span>Extrapolación post-apertura</span>
               </div>
 
               <div className="pba-chart-section">
@@ -178,6 +217,29 @@ export function PresionBocaAnalysis() {
                 )}
               </div>
               <div className="pba-section-divider">
+                <span>Extrapolación pre-apertura</span>
+              </div>
+
+              <div className="pba-chart-section">
+                {preAperturaLoading ? (
+                  <div className="loading-card">Cargando extrapolaciones pre-apertura…</div>
+                ) : (
+                  <>
+                    <PreAperturaTable
+                      events={preAperturaEvents}
+                      selectedTs={selectedPreAperturaTs}
+                      onSelect={(ts) => setSelectedPreAperturaTs((prev) => (prev === ts ? null : ts))}
+                    />
+                    {selectedPreAperturaEvent ? (
+                      <div className="pba-chart-section pba-chart-section--inner">
+                        <PreAperturaFitChart event={selectedPreAperturaEvent} />
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+
+              <div className="pba-section-divider">
                 <span>Densidad de columna</span>
               </div>
 
@@ -192,7 +254,21 @@ export function PresionBocaAnalysis() {
               </div>
             </>
           ) : (
-            <OverlayChart data={displayData} />
+            <>
+              <OverlayChart data={displayData} />
+
+              <div className="pba-section-divider">
+                <span>Producción del PAD</span>
+              </div>
+
+              <div className="pba-chart-section pba-chart-section--full">
+                {gorLoading ? (
+                  <div className="loading-card">Cargando datos de producción…</div>
+                ) : (
+                  <GorEvolutionPanel records={gorData} />
+                )}
+              </div>
+            </>
           )}
         </div>
       ) : null}
