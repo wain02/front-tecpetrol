@@ -2,11 +2,10 @@ import { useState } from "react";
 import tecpetrolLogo from "../logos/logo-tecpe.png";
 import { PresionBocaAnalysis } from "./presion-boca";
 import { CargaCsv } from "./carga-csv";
-import { Documentacion } from "./documentacion";
 import { AnalisisCurva } from "./analisis-curva";
 import { CargaBackend } from "./carga-backend";
 
-type Tab = "upload" | "docs" | "presion-boca" | "analisis-curva" | "backend";
+type Tab = "upload" | "presion-boca" | "analisis-curva" | "backend";
 
 function cx(...items: Array<string | false | undefined>): string {
   return items.filter(Boolean).join(" ");
@@ -34,13 +33,6 @@ function App() {
             </button>
             <button
               type="button"
-              className={cx("tab", activeTab === "docs" && "tab--active")}
-              onClick={() => setActiveTab("docs")}
-            >
-              Documentacion
-            </button>
-            <button
-              type="button"
               className={cx("tab", activeTab === "presion-boca" && "tab--active")}
               onClick={() => setActiveTab("presion-boca")}
             >
@@ -65,8 +57,6 @@ function App() {
 
         {activeTab === "upload" ? (
           <CargaCsv />
-        ) : activeTab === "docs" ? (
-          <Documentacion />
         ) : activeTab === "analisis-curva" ? (
           <AnalisisCurva />
         ) : activeTab === "backend" ? (

@@ -129,9 +129,20 @@ export function CargaBackend() {
       <div className="upload__card upload__card--wide">
         <h1>Carga de Archivos</h1>
         <p>
-          Generá las plantillas desde el backend, completalas en Excel y luego subí los archivos terminados para
-          procesarlos.
+          El flujo es simple: primero descargás el template de datos y el template de metadata, después completás
+          ambos archivos en Excel y finalmente los subís al backend junto con el nombre del PAD y la lista de pozos.
         </p>
+
+        <div className="docs__block">
+          <h2>Cómo funciona</h2>
+          <ol className="docs__list">
+            <li>Ingresá el <strong>PAD ID</strong> que va a identificar el lote de pozos.</li>
+            <li>Definí la <strong>cantidad de pozos</strong> y sus <strong>nombres</strong>.</li>
+            <li>Descargá el <strong>template de datos</strong> y el <strong>template de metadata</strong>.</li>
+            <li>Completá ambos Excel con la información correspondiente.</li>
+            <li>Subí los dos archivos completados para que el backend los procese.</li>
+          </ol>
+        </div>
 
         <div className="upload__form-head">
           <div className="form__field">
@@ -158,6 +169,9 @@ export function CargaBackend() {
 
         <div className="form__field">
           <span>Nombres de pozos</span>
+          <p className="upload__note">
+            Los nombres tienen que coincidir con los que después vas a usar en el template y en la carga final.
+          </p>
           <div className="form__grid">
             {nombres.map((nombre, index) => (
               <label className="form__field" key={`${index}-${nombre}`}>
@@ -195,8 +209,10 @@ export function CargaBackend() {
             accept=".xlsx"
             onChange={(event) => setDatosXlsx(event.target.files?.[0] ?? null)}
           />
-          <span className="upload__title">Subir datos_xlsx completado</span>
-          <span className="upload__hint">{datosXlsx ? datosXlsx.name : "Elegí el archivo generado desde el template de datos"}</span>
+          <span className="upload__title">Subir archivo de datos completado</span>
+          <span className="upload__hint">
+            {datosXlsx ? datosXlsx.name : "Elegí el archivo generado desde el template de datos"}
+          </span>
         </label>
 
         <label className="upload__drop upload__drop--secondary">
@@ -205,7 +221,7 @@ export function CargaBackend() {
             accept=".xlsx"
             onChange={(event) => setMetadataXlsx(event.target.files?.[0] ?? null)}
           />
-          <span className="upload__title">Subir metadata_xlsx completado</span>
+          <span className="upload__title">Subir archivo de metadata completado</span>
           <span className="upload__hint">
             {metadataXlsx ? metadataXlsx.name : "Elegí el archivo generado desde el template de metadata"}
           </span>
