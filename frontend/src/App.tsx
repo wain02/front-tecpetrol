@@ -4,8 +4,9 @@ import { PresionBocaAnalysis } from "./presion-boca";
 import { CargaCsv } from "./carga-csv";
 import { Documentacion } from "./documentacion";
 import { AnalisisCurva } from "./analisis-curva";
+import { CargaBackend } from "./carga-backend";
 
-type Tab = "upload" | "docs" | "presion-boca" | "analisis-curva";
+type Tab = "upload" | "docs" | "presion-boca" | "analisis-curva" | "backend";
 
 function cx(...items: Array<string | false | undefined>): string {
   return items.filter(Boolean).join(" ");
@@ -52,6 +53,13 @@ function App() {
             >
               Análisis curva
             </button>
+            <button
+              type="button"
+              className={cx("tab", activeTab === "backend" && "tab--active")}
+              onClick={() => setActiveTab("backend")}
+            >
+              Carga Archivos
+            </button>
           </nav>
         </header>
 
@@ -61,6 +69,8 @@ function App() {
           <Documentacion />
         ) : activeTab === "analisis-curva" ? (
           <AnalisisCurva />
+        ) : activeTab === "backend" ? (
+          <CargaBackend />
         ) : (
           <PresionBocaAnalysis />
         )}
