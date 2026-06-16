@@ -1,7 +1,7 @@
 import { useState } from "react";
 import tecpetrolLogo from "../logos/logo-tecpe.png";
 import { AnalisisCurva } from "./analisis-curva";
-import { CargaBackend } from "./carga-backend";
+import { CargaDatos } from "./carga-datos";
 import { Informe } from "./informe";
 import { PresionBocaAnalysis } from "./presion-boca";
 
@@ -58,7 +58,7 @@ function App() {
         {activeTab === "analisis-curva" ? (
           <AnalisisCurva />
         ) : activeTab === "backend" ? (
-          <CargaBackend />
+          <CargaDatos />
         ) : activeTab === "informe" ? (
           <Informe />
         ) : (

@@ -20,9 +20,11 @@ export function PresionBocaAnalysis() {
   const [selectedPozo, setSelectedPozo] = useState<string>("");
   const [extrapolaciones, setExtrapolaciones] = useState<ExtrapolationEvent[]>([]);
   const [extrapLoading, setExtrapLoading] = useState(false);
+  const [extrapRefreshKey, setExtrapRefreshKey] = useState(0);
   const [selectedEventTs, setSelectedEventTs] = useState<string | null>(null);
   const [preAperturaEvents, setPreAperturaEvents] = useState<PreAperturaEvent[]>([]);
   const [preAperturaLoading, setPreAperturaLoading] = useState(false);
+  const [preAperturaRefreshKey, setPreAperturaRefreshKey] = useState(0);
   const [selectedPreAperturaTs, setSelectedPreAperturaTs] = useState<string | null>(null);
   const [densidadData, setDensidadData] = useState<DensidadColumnaRecord[]>([]);
   const [densidadLoading, setDensidadLoading] = useState(false);
@@ -39,8 +41,12 @@ export function PresionBocaAnalysis() {
   useEffect(() => {
     setExtrapolaciones([]);
     setSelectedEventTs(null);
+    if (selectedPad && selectedPozo) setExtrapLoading(true);
+    else setExtrapLoading(false);
+  }, [selectedPad, selectedPozo]);
+
+  useEffect(() => {
     if (!selectedPad || !selectedPozo) return;
-    setExtrapLoading(true);
     fetchJson<ExtrapolationEvent[]>(
       buildApiUrl("/pressure-extrapolation/extrapolacion_eventos/produccion", {
         pad: selectedPad,
@@ -50,13 +56,17 @@ export function PresionBocaAnalysis() {
       .then(setExtrapolaciones)
       .catch(() => setExtrapolaciones([]))
       .finally(() => setExtrapLoading(false));
-  }, [selectedPad, selectedPozo]);
+  }, [selectedPad, selectedPozo, extrapRefreshKey]);
 
   useEffect(() => {
     setPreAperturaEvents([]);
     setSelectedPreAperturaTs(null);
+    if (selectedPad && selectedPozo) setPreAperturaLoading(true);
+    else setPreAperturaLoading(false);
+  }, [selectedPad, selectedPozo]);
+
+  useEffect(() => {
     if (!selectedPad || !selectedPozo) return;
-    setPreAperturaLoading(true);
     fetchJson<PreAperturaEvent[]>(
       buildApiUrl("/pressure-extrapolation/extrapolacion_eventos/pre_apertura", {
         pad: selectedPad,
@@ -66,7 +76,7 @@ export function PresionBocaAnalysis() {
       .then(setPreAperturaEvents)
       .catch(() => setPreAperturaEvents([]))
       .finally(() => setPreAperturaLoading(false));
-  }, [selectedPad, selectedPozo]);
+  }, [selectedPad, selectedPozo, preAperturaRefreshKey]);
 
   useEffect(() => {
     setGorData([]);
@@ -210,7 +220,10 @@ export function PresionBocaAnalysis() {
                     />
                     {selectedEvent ? (
                       <div className="pba-chart-section pba-chart-section--inner">
-                        <EventFitChart event={selectedEvent} />
+                        <EventFitChart
+                          event={selectedEvent}
+                          onSaved={() => setExtrapRefreshKey((k) => k + 1)}
+                        />
                       </div>
                     ) : null}
                   </>
@@ -232,7 +245,10 @@ export function PresionBocaAnalysis() {
                     />
                     {selectedPreAperturaEvent ? (
                       <div className="pba-chart-section pba-chart-section--inner">
-                        <PreAperturaFitChart event={selectedPreAperturaEvent} />
+                        <PreAperturaFitChart
+                          event={selectedPreAperturaEvent}
+                          onSaved={() => setPreAperturaRefreshKey((k) => k + 1)}
+                        />
                       </div>
                     ) : null}
                   </>

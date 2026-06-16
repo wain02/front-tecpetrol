@@ -36,6 +36,11 @@ export type ExtrapolationEvent = {
   P_primer_dato: number;
   delta_vs_primer_dato_exp: number | null;
   delta_vs_primer_dato_semilog: number | null;
+  // Present when a saved recalculation exists
+  t_rel_original?: number[];
+  p_obs_original?: number[];
+  puntos_seleccionados?: number[];
+  resultados_originales?: ExtrapolationEvent;
 };
 
 export type PreAperturaEvent = {
@@ -61,6 +66,11 @@ export type PreAperturaEvent = {
   delta_ultimo_vs_lineal: number | null;
   delta_ultimo_vs_exp: number | null;
   delta_ultimo_vs_semilog: number | null;
+  // Present when a saved recalculation exists
+  t_rel_original?: number[];
+  p_obs_original?: number[];
+  puntos_seleccionados?: number[];
+  resultados_originales?: PreAperturaEvent;
 };
 
 export type GorEvolutionRecord = {
